@@ -540,33 +540,47 @@
   <!-- ═══ TAB: NETWORK ═══ -->
   <div class="tab-panel" id="panel-network">
     <div class="network-controls">
+      <div class="search-wrap" style="max-width:220px">
+        <span class="search-icon">⌕</span>
+        <input class="search-input" id="netGeneInput" type="search"
+          placeholder="Focus gene (e.g. pbp2x)…"
+          oninput="netFocusFromInput()" list="netGeneSuggestions" autocomplete="off"/>
+        <datalist id="netGeneSuggestions"></datalist>
+      </div>
       <select class="filter-select" id="netFilter" onchange="buildNetwork()">
         <option value="">All methods</option>
-        <option value="Dual_Tn-seq">Dual Tn-seq</option>
+        <option value="Dual Tn-seq">Dual Tn-seq</option>
         <option value="CRISPRi-TnSeq">CRISPRi-TnSeq</option>
-        <option value="Dual_CRISPRi-Seq">Dual CRISPRi-Seq</option>
-        <option value="classical_genetics">Classical genetics</option>
-        <option value="population_genomics">Population genomics</option>
+        <option value="Dual CRISPRi-Seq">Dual CRISPRi-Seq</option>
+        <option value="classical">Classical genetics</option>
+        <option value="suppressor">Suppressor genetics</option>
       </select>
       <select class="filter-select" id="netClassFilter" onchange="buildNetwork()">
         <option value="">All classes</option>
         <option value="negative">Negative only</option>
         <option value="positive">Positive only</option>
       </select>
+      <button class="nav-btn" onclick="netClearFocus()">✕ Clear focus</button>
       <button class="nav-btn" onclick="resetNetwork()">↺ Reset layout</button>
-      <span style="font-size:var(--text-xs);color:var(--text-muted)">Click a node to highlight. Drag to move. Scroll to zoom.</span>
     </div>
     <div class="legend-row">
-      <div class="legend-item"><div class="legend-line" style="background:var(--negative)"></div> Negative / Synthetic lethal</div>
-      <div class="legend-item"><div class="legend-line" style="background:var(--positive)"></div> Positive / Suppressor</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#4d9fff"></div> Cell wall / PG synthesis</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#cc80ff"></div> Regulation / Signaling</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#ffb84d"></div> Division / Shape</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#4dcccc"></div> Chromosome / DNA</div>
+      <div class="legend-item"><div class="legend-line" style="background:var(--negative)"></div> Negative</div>
+      <div class="legend-item"><div class="legend-line" style="background:var(--positive)"></div> Positive</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#4d9fff"></div> Cell wall / PG</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#cc80ff"></div> Regulation</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ffb84d"></div> Division</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#4dcccc"></div> Chromosome</div>
       <div class="legend-item"><div class="legend-dot" style="background:#ff8080"></div> Metabolism</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#aaa"></div> Unknown / Other</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#888"></div> Other</div>
+      <span style="font-size:var(--text-xs);color:var(--text-muted);margin-left:auto">Click node to focus · drag · scroll to zoom</span>
     </div>
-    <canvas id="networkCanvas" height="600"></canvas>
+    <div style="display:flex;gap:var(--space-4);align-items:flex-start">
+      <canvas id="networkCanvas" height="600" style="flex:1;min-width:0"></canvas>
+      <div id="netSidebar" style="width:220px;flex-shrink:0;display:none;font-size:var(--text-xs)">
+        <div style="font-weight:700;margin-bottom:var(--space-2)" id="netSidebarTitle"></div>
+        <div id="netSidebarList" style="max-height:560px;overflow-y:auto"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ═══ TAB: SUMMARY ═══ -->
@@ -636,6 +650,52 @@
 </div>
 
 <script>
+// ══════════════════════════════════════════════════════════════════
+//  LOCUS ALIAS INDEX
+//  Maps any query string → set of canonical gene_a display names
+//  so that searching "spd_0912", "SPV_0912", "pbp2x" etc. all work
+// ══════════════════════════════════════════════════════════════════
+const ALIAS_INDEX = (() => {
+  // map: normalised alias → Set of gene display names present in DB
+  const idx = {};
+  function add(alias, name) {
+    const k = alias.toLowerCase().replace(/[\s_]/g, '');
+    if (!idx[k]) idx[k] = new Set();
+    idx[k].add(name);
+  }
+  GI_DATABASE.forEach(r => {
+    [['gene_a', 'gene_a_locus'], ['gene_b', 'gene_b_locus']].forEach(([gk, lk]) => {
+      const name  = r[gk]  || '';
+      const locus = r[lk]  || '';
+      if (name)  { add(name,  name); add(locus, name); }
+      // Also add numeric suffix alone: "spd0912" → name, "0912" → name
+      const m = locus.match(/(\d{4,})$/);
+      if (m) add(m[1], name);
+      // SPV ↔ SPD equivalence (same number)
+      if (locus.startsWith('SPD_')) add('SPV_' + locus.slice(4), name);
+      if (locus.startsWith('SPV_')) add('SPD_' + locus.slice(4), name);
+    });
+  });
+  return idx;
+})();
+
+function resolveQuery(q) {
+  // Returns a Set of canonical gene names that match the query, or null for no restriction
+  if (!q) return null;
+  const k = q.toLowerCase().replace(/[\s_]/g, '');
+  // Direct alias hit
+  if (ALIAS_INDEX[k]) return ALIAS_INDEX[k];
+  // Partial match: find all alias keys that contain q (for short queries ≥3 chars)
+  if (k.length >= 3) {
+    const merged = new Set();
+    for (const [alias, names] of Object.entries(ALIAS_INDEX)) {
+      if (alias.includes(k)) names.forEach(n => merged.add(n));
+    }
+    if (merged.size) return merged;
+  }
+  return null;  // fall back to text search
+}
+
 // ══════════════════════════════════════════
 //  APP STATE
 // ══════════════════════════════════════════
@@ -660,55 +720,42 @@ function toggleTheme() {
 // ══════════════════════════════════════════
 function setTab(name) {
   ['table','network','summary'].forEach(t => {
-    document.getElementById(`panel-${t}`).classList.toggle('active', t === name);
-    document.getElementById(`tab-${t}`).classList.toggle('active', t === name);
+    document.getElementById(`tab-${t}`).classList.toggle('active', t===name);
+    document.getElementById(`panel-${t}`).classList.toggle('active', t===name);
   });
   if (name === 'network') buildNetwork();
   if (name === 'summary') buildSummary();
 }
 
 // ══════════════════════════════════════════
-//  TABLE HELPERS
-// ══════════════════════════════════════════
-function classBadge(cls) {
-  if (cls === 'negative') return `<span class="badge badge-negative">negative</span>`;
-  if (cls === 'positive') return `<span class="badge badge-positive">positive</span>`;
-  return `<span class="badge badge-mixed">${cls}</span>`;
-}
-function valBadge(v) {
-  if (v === 'confirmed_in_study') return `<span class="badge badge-val-confirmed">confirmed</span>`;
-  if (v === 'independently_replicated') return `<span class="badge badge-val-replicated">replicated</span>`;
-  return `<span class="badge badge-val-predicted">predicted</span>`;
-}
-function methodBadge(m) {
-  const short = m.split('+')[0].replace('classical_genetics','classical').replace('population_genomics','pop.genomics').replace('Dual_Tn-seq','Dual Tn-seq').replace('CRISPRi-TnSeq','CRISPRi-TnSeq').replace('Dual_CRISPRi-Seq','Dual CRISPRi');
-  return `<span class="badge-method">${short}</span>`;
-}
-function geneMethodColor(gene) {
-  // color coding for categories
-  const g = gene.toLowerCase();
-  if (/pbp|mlt|mur|coz|rod|mre/.test(g)) return '#4d9fff';
-  if (/stkp|gpsp|phpP|ireb|macP|gpsb/.test(g) || g.includes('stkp') || g.includes('gpsb') || g.includes('khp') || g.includes('elor') || g.includes('ireB')) return '#cc80ff';
-  if (/fts|div|sep|map/.test(g)) return '#ffb84d';
-  if (/smc|par|hlp|ftsK/.test(g)) return '#4dcccc';
-  if (/pyr|pst|pho|pdx|lys|fab/.test(g)) return '#ff8080';
-  return '#888';
-}
-
-// ══════════════════════════════════════════
-//  TABLE RENDER
+//  TABLE FILTER + SEARCH
 // ══════════════════════════════════════════
 function filterData() {
-  const q = document.getElementById('searchInput').value.toLowerCase();
-  const cls = document.getElementById('filterClass').value;
+  const raw = document.getElementById('searchInput').value.trim();
+  const q   = raw.toLowerCase();
+  const cls  = document.getElementById('filterClass').value;
   const meth = document.getElementById('filterMethod').value;
-  const val = document.getElementById('filterVal').value;
+  const val  = document.getElementById('filterVal').value;
+
+  // Resolve aliases for gene search
+  const resolved = resolveQuery(raw);
+
   filteredData = GI_DATABASE.filter(r => {
-    const matchQ = !q || [r.id, r.gene_a, r.gene_b, r.gene_a_locus, r.gene_b_locus,
-      r.method, r.subtype, r.strain, r.func_a, r.func_b, r.quote].join(' ').toLowerCase().includes(q);
-    const matchCls = !cls || r.class === cls;
+    let matchQ;
+    if (!q) {
+      matchQ = true;
+    } else if (resolved) {
+      // Match if gene_a OR gene_b is in the resolved set
+      matchQ = resolved.has(r.gene_a) || resolved.has(r.gene_b);
+    } else {
+      // Fallback: plain text search across all fields
+      matchQ = [r.id, r.gene_a, r.gene_b, r.gene_a_locus, r.gene_b_locus,
+        r.method, r.subtype, r.strain, r.func_a, r.func_b, r.quote]
+        .join(' ').toLowerCase().includes(q);
+    }
+    const matchCls  = !cls  || r.class === cls;
     const matchMeth = !meth || r.method.includes(meth);
-    const matchVal = !val || r.validation === val;
+    const matchVal  = !val  || r.validation === val;
     return matchQ && matchCls && matchMeth && matchVal;
   });
   if (sortKey) applySortInPlace();
@@ -740,18 +787,19 @@ function renderTable() {
 function renderTableRows() {
   const start = (currentPage - 1) * PAGE_SIZE;
   const pageData = filteredData.slice(start, start + PAGE_SIZE);
-  document.getElementById('resultsInfo').textContent = `Showing ${start+1}–${Math.min(start+PAGE_SIZE, filteredData.length)} of ${filteredData.length}`;
+  document.getElementById('resultsInfo').textContent =
+    `Showing ${start+1}–${Math.min(start+PAGE_SIZE, filteredData.length)} of ${filteredData.length}`;
   const tbody = document.getElementById('tableBody');
   tbody.innerHTML = pageData.map(r => `
     <tr class="tr-clickable" onclick="openModal('${r.id}')">
       <td><span style="font-family:var(--font-display);font-size:var(--text-xs);color:var(--text-muted)">${r.id}</span></td>
       <td>
         <span class="gene-pill">${r.gene_a}</span>
-        ${r.gene_a_locus !== r.gene_a ? `<br><span style="font-size:var(--text-xs);color:var(--text-muted)">${r.gene_a_locus}</span>` : ''}
+        ${r.gene_a_locus && r.gene_a_locus !== r.gene_a ? `<br><span style="font-size:var(--text-xs);color:var(--text-muted)">${r.gene_a_locus}</span>` : ''}
       </td>
       <td>
         <span class="gene-pill">${r.gene_b}</span>
-        ${r.gene_b_locus !== r.gene_b ? `<br><span style="font-size:var(--text-xs);color:var(--text-muted)">${r.gene_b_locus}</span>` : ''}
+        ${r.gene_b_locus && r.gene_b_locus !== r.gene_b ? `<br><span style="font-size:var(--text-xs);color:var(--text-muted)">${r.gene_b_locus}</span>` : ''}
       </td>
       <td>${classBadge(r.class)}</td>
       <td><span style="font-size:var(--text-xs);color:var(--text-secondary)">${r.subtype.replace(/_/g,' ')}</span></td>
@@ -793,14 +841,15 @@ function openModal(id) {
   const r = GI_DATABASE.find(x => x.id === id);
   if (!r) return;
   document.getElementById('modalId').textContent = r.id;
-  document.getElementById('modalGenes').innerHTML = `<span class="gene-pill">${r.gene_a}</span> &nbsp;${r.class === 'negative' ? '✕' : '↺'}&nbsp; <span class="gene-pill">${r.gene_b}</span>`;
+  document.getElementById('modalGenes').innerHTML =
+    `<span class="gene-pill">${r.gene_a}</span> &nbsp;${r.class === 'negative' ? '✕' : '↺'}&nbsp; <span class="gene-pill">${r.gene_b}</span>`;
 
   const fields = [
     ['Interaction Class', classBadge(r.class)],
     ['Subtype', r.subtype.replace(/_/g,' ')],
     ['Method', methodBadge(r.method)],
     ['Score', r.score],
-    ['p-value (adjusted)', r.pval],
+    ['p-value (adjusted)', r.padj],
     ['Validation', valBadge(r.validation)],
     ['Strain', r.strain],
     ['Condition', r.condition],
@@ -811,11 +860,11 @@ function openModal(id) {
     ['Gene A Function', r.func_a, true],
     ['Gene B Function', r.func_b, true],
     ['PMID', r.pmid ? `<a class="doi-link" href="https://pubmed.ncbi.nlm.nih.gov/${r.pmid}" target="_blank">${r.pmid} ↗</a>` : '—'],
-    ['DOI', r.doi ? `<a class="doi-link" href="https://doi.org/${r.doi}" target="_blank">${r.doi} ↗</a>` : '—'],
+    ['DOI',  r.doi  ? `<a class="doi-link" href="https://doi.org/${r.doi}" target="_blank">${r.doi} ↗</a>` : '—'],
   ];
 
   document.getElementById('modalGrid').innerHTML = fields.map(([label, val, full=false]) =>
-    `<div class="modal-field${full?' full':''}"><label>${label}</label><div class="val">${val}</div></div>`
+    `<div class="modal-field${full?' full':''}"><label>${label}</label><div class="val">${val||'—'}</div></div>`
   ).join('');
   document.getElementById('modalQuote').textContent = r.quote ? `"${r.quote}"` : 'No quote available.';
   document.getElementById('modalOverlay').classList.add('open');
@@ -826,98 +875,211 @@ function closeModalDirect() { document.getElementById('modalOverlay').classList.
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModalDirect(); });
 
 // ══════════════════════════════════════════
-//  NETWORK CANVAS
+//  NETWORK — gene-focused ego graph
 // ══════════════════════════════════════════
 let netNodes = [], netEdges = [], netTransform = {x:0, y:0, scale:1};
-let dragging = null, lastMouse = null, highlightedNode = null;
+let dragging = false, lastMouse = null, focusGene = null;
+let animFrame = 0;
 
 function nodeColor(g) {
-  const lc = g.toLowerCase();
-  if (/pbp|mlt|mur[a-z]|coz|rod[a-z]|mre/.test(lc)) return '#4d9fff';
-  if (/stkp|gpsb|khp|elor|ireb|macp|phpP/.test(lc) || lc==='stk' || lc.includes('stkp')) return '#cc80ff';
-  if (/fts[a-z]|div|sep|map/.test(lc)) return '#ffb84d';
-  if (/smc|par[a-z]|hlp|ftsk/.test(lc)) return '#4dcccc';
-  if (/pyr|pst|pho|pdx|lys[xy]|fab/.test(lc)) return '#ff8080';
+  const lc = (g||'').toLowerCase();
+  if (/pbp|mlt|mur[a-z]|coz|rod[a-z]|mre/.test(lc))           return '#4d9fff';
+  if (/stkp|gpsb|khp|elor|ireb|macp|phpp/.test(lc))            return '#cc80ff';
+  if (/fts[a-z]|div|sep\b/.test(lc))                            return '#ffb84d';
+  if (/smc|par[a-z]|hlp|ftsk/.test(lc))                         return '#4dcccc';
+  if (/pyr|fab|lys[xy]|pur|pdx|pst/.test(lc))                  return '#ff8080';
   return '#888';
 }
 
+// Populate gene autocomplete datalist
+function populateNetSuggestions() {
+  const names = new Set();
+  GI_DATABASE.forEach(r => { if(r.gene_a) names.add(r.gene_a); if(r.gene_b) names.add(r.gene_b); });
+  const dl = document.getElementById('netGeneSuggestions');
+  dl.innerHTML = [...names].sort().map(n => `<option value="${n}">`).join('');
+}
+
+function netFocusFromInput() {
+  const v = document.getElementById('netGeneInput').value.trim();
+  if (!v) { netClearFocus(); return; }
+  // Resolve aliases → canonical name
+  const resolved = resolveQuery(v);
+  if (resolved && resolved.size > 0) {
+    // Pick the first (most commonly used) resolved name, or try exact match first
+    const exact = [...resolved].find(n => n.toLowerCase() === v.toLowerCase());
+    focusGene = exact || [...resolved][0];
+  } else {
+    focusGene = v;
+  }
+  buildNetwork();
+}
+
+function netClearFocus() {
+  focusGene = null;
+  document.getElementById('netGeneInput').value = '';
+  document.getElementById('netSidebar').style.display = 'none';
+  buildNetwork();
+}
+
 function buildNetwork() {
+  cancelAnimationFrame(animFrame);
   const canvas = document.getElementById('networkCanvas');
-  const W = canvas.offsetWidth || 800;
+  const W = canvas.offsetWidth || 820;
   canvas.width = W; canvas.height = 600;
 
   const mf = document.getElementById('netFilter').value;
   const cf = document.getElementById('netClassFilter').value;
+
   let data = GI_DATABASE.filter(r =>
     (!mf || r.method.includes(mf)) &&
     (!cf || r.class === cf) &&
-    r.gene_a !== 'multiple' && r.gene_b !== 'multiple' &&
+    r.gene_a && r.gene_b &&
     !r.gene_a.includes('genome-wide') && !r.gene_b.includes('genome-wide')
   );
 
-  // Build unique nodes
-  const nodeSet = new Set();
-  data.forEach(r => { nodeSet.add(r.gene_a); nodeSet.add(r.gene_b); });
-  const nodes = {};
-  let i = 0;
-  nodeSet.forEach(g => {
-    const angle = (i / nodeSet.size) * 2 * Math.PI;
-    const radius = Math.min(W, 600) * 0.32;
-    nodes[g] = {
-      id: g, x: W/2 + radius * Math.cos(angle), y: 300 + radius * Math.sin(angle),
-      vx: 0, vy: 0, color: nodeColor(g),
-      degree: 0
-    };
-    i++;
-  });
-  data.forEach(r => { if(nodes[r.gene_a]) nodes[r.gene_a].degree++; if(nodes[r.gene_b]) nodes[r.gene_b].degree++; });
-  netNodes = Object.values(nodes);
+  // ── If a gene is focused, show ego graph (1-hop neighbourhood only) ────────
+  if (focusGene) {
+    data = data.filter(r => r.gene_a === focusGene || r.gene_b === focusGene);
+    updateSidebar(data);
+  } else {
+    // Without focus: cap at 800 rows to keep canvas responsive
+    // Prefer classical + Tn-seq data (smaller, more curated) if no filter set
+    if (!mf && data.length > 800) {
+      const priority = data.filter(r =>
+        !r.method.includes('Dual CRISPRi') && !r.method.includes('CRISPRi-TnSeq')
+      );
+      data = priority.length >= 20 ? priority : data.slice(0, 800);
+    }
+    document.getElementById('netSidebar').style.display = 'none';
+  }
+
+  // ── Build node map ─────────────────────────────────────────────────────────
+  const nodeMap = {};
+  const cx = W / 2, cy = 300;
+
+  if (focusGene && data.length > 0) {
+    // Hub-spoke layout: focus gene in centre, neighbours in circle
+    nodeMap[focusGene] = { id: focusGene, x: cx, y: cy, vx:0, vy:0, color: nodeColor(focusGene), degree:0, isFocus:true };
+    const neighbours = [];
+    data.forEach(r => {
+      const partner = r.gene_a === focusGene ? r.gene_b : r.gene_a;
+      if (!nodeMap[partner]) neighbours.push(partner);
+      nodeMap[partner] = nodeMap[partner] || null; // placeholder
+    });
+    const uniqueNeighbours = [...new Set(data.map(r => r.gene_a === focusGene ? r.gene_b : r.gene_a))];
+    const radius = Math.min(W * 0.38, 240);
+    uniqueNeighbours.forEach((g, i) => {
+      const angle = (i / uniqueNeighbours.length) * 2 * Math.PI - Math.PI / 2;
+      nodeMap[g] = { id: g, x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle), vx:0, vy:0, color: nodeColor(g), degree:0, isFocus:false };
+    });
+  } else {
+    // Force-directed layout for overview
+    let i = 0;
+    const allGenes = new Set();
+    data.forEach(r => { allGenes.add(r.gene_a); allGenes.add(r.gene_b); });
+    const n = allGenes.size;
+    allGenes.forEach(g => {
+      const angle = (i / n) * 2 * Math.PI;
+      const r = Math.min(W, 600) * 0.32;
+      nodeMap[g] = { id: g, x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), vx:0, vy:0, color: nodeColor(g), degree:0, isFocus:false };
+      i++;
+    });
+  }
+
+  netNodes = Object.values(nodeMap).filter(Boolean);
   netEdges = data.map(r => ({ a: r.gene_a, b: r.gene_b, cls: r.class, id: r.id }));
-  highlightedNode = null;
+  netNodes.forEach(n => {
+    netEdges.forEach(e => { if (e.a === n.id || e.b === n.id) n.degree++; });
+  });
+
   netTransform = {x:0, y:0, scale:1};
-  animateNetwork();
+  animateNetwork(focusGene ? 60 : 180);  // fewer steps for spoke layout
 }
 
+function updateSidebar(data) {
+  const sidebar = document.getElementById('netSidebar');
+  const title   = document.getElementById('netSidebarTitle');
+  const list    = document.getElementById('netSidebarList');
+  sidebar.style.display = 'block';
+
+  const negData = data.filter(r => r.class === 'negative' || r.class.includes('negative'));
+  const posData = data.filter(r => r.class === 'positive' || r.class.includes('positive'));
+
+  title.innerHTML = `<span class="gene-pill" style="font-size:var(--text-sm)">${focusGene}</span>
+    <span style="color:var(--text-muted);font-weight:400"> · ${data.length} interactions</span>`;
+
+  function partnerRows(rows, cls) {
+    return rows.map(r => {
+      const partner = r.gene_a === focusGene ? r.gene_b : r.gene_a;
+      const locus   = r.gene_a === focusGene ? r.gene_b_locus : r.gene_a_locus;
+      const score   = r.score ? parseFloat(r.score).toFixed(2) : '';
+      return `<div style="padding:3px 0;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;align-items:center"
+        onclick="openModal('${r.id}')">
+        <span class="gene-pill" style="font-size:10px;background:${cls==='negative'?'rgba(255,90,90,.15)':'rgba(77,204,128,.15)'}">${partner}</span>
+        <span style="color:var(--text-muted);font-size:9px">${locus||''}</span>
+        <span style="color:${cls==='negative'?'var(--negative)':'var(--positive)'};font-size:10px;font-weight:600">${score}</span>
+      </div>`;
+    }).join('');
+  }
+
+  let html = '';
+  if (negData.length) {
+    html += `<div style="font-weight:600;color:var(--negative);margin:6px 0 3px">Negative (${negData.length})</div>`;
+    // Sort by score (most negative first)
+    negData.sort((a,b) => (parseFloat(a.score)||0) - (parseFloat(b.score)||0));
+    html += partnerRows(negData, 'negative');
+  }
+  if (posData.length) {
+    html += `<div style="font-weight:600;color:var(--positive);margin:6px 0 3px">Positive (${posData.length})</div>`;
+    posData.sort((a,b) => (parseFloat(b.score)||0) - (parseFloat(a.score)||0));
+    html += partnerRows(posData, 'positive');
+  }
+  list.innerHTML = html || '<div style="color:var(--text-muted)">No interactions</div>';
+}
+
+// ── Force simulation ───────────────────────────────────────────────────────
 function forceStep() {
-  const k = 120, repulsion = 8000;
+  if (focusGene) return;  // no forces needed for spoke layout
+  const k = 100, repulsion = 5000;
+  // Attraction along edges
   netEdges.forEach(e => {
     const a = netNodes.find(n => n.id === e.a);
     const b = netNodes.find(n => n.id === e.b);
     if (!a || !b) return;
     const dx = b.x - a.x, dy = b.y - a.y;
-    const dist = Math.sqrt(dx*dx+dy*dy) || 1;
-    const force = (dist - k) * 0.015;
+    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+    const force = (dist - k) * 0.012;
     const fx = dx/dist * force, fy = dy/dist * force;
     a.vx += fx; a.vy += fy;
     b.vx -= fx; b.vy -= fy;
   });
+  // Repulsion between all pairs
   for (let i = 0; i < netNodes.length; i++) {
     for (let j = i+1; j < netNodes.length; j++) {
       const a = netNodes[i], b = netNodes[j];
       const dx = b.x - a.x, dy = b.y - a.y;
-      const dist2 = dx*dx+dy*dy || 1;
+      const dist2 = dx*dx + dy*dy || 1;
       const f = repulsion / dist2;
-      const fx = dx/Math.sqrt(dist2)*f, fy = dy/Math.sqrt(dist2)*f;
-      a.vx -= fx; a.vy -= fy;
-      b.vx += fx; b.vy += fy;
+      const d = Math.sqrt(dist2);
+      a.vx -= dx/d*f; a.vy -= dy/d*f;
+      b.vx += dx/d*f; b.vy += dy/d*f;
     }
   }
   const canvas = document.getElementById('networkCanvas');
   netNodes.forEach(n => {
-    n.vx *= 0.8; n.vy *= 0.8;
-    n.x += n.vx; n.y += n.vy;
-    n.x = Math.max(40, Math.min(canvas.width-40, n.x));
-    n.y = Math.max(40, Math.min(canvas.height-40, n.y));
+    n.vx *= 0.75; n.vy *= 0.75;
+    n.x += n.vx;  n.y += n.vy;
+    n.x = Math.max(40, Math.min(canvas.width - 40, n.x));
+    n.y = Math.max(40, Math.min(canvas.height - 40, n.y));
   });
 }
 
-let animFrame = 0;
-function animateNetwork() {
+function animateNetwork(maxSteps) {
   const canvas = document.getElementById('networkCanvas');
   const ctx = canvas.getContext('2d');
   let steps = 0;
   function frame() {
-    if (steps < 120) { forceStep(); steps++; }
+    if (steps < maxSteps) { forceStep(); steps++; }
     drawNetwork(ctx, canvas);
     animFrame = requestAnimationFrame(frame);
   }
@@ -937,24 +1099,28 @@ function drawNetwork(ctx, canvas) {
     const a = netNodes.find(n => n.id === e.a);
     const b = netNodes.find(n => n.id === e.b);
     if (!a || !b) return;
-    const highlighted = !highlightedNode || a.id === highlightedNode || b.id === highlightedNode;
-    ctx.globalAlpha = highlighted ? 0.75 : 0.12;
-    ctx.strokeStyle = e.cls === 'negative' ? '#ff5a5a' : '#4dcc80';
-    ctx.lineWidth = highlighted ? 1.5 : 1;
+    ctx.globalAlpha = 0.7;
+    ctx.strokeStyle = e.cls.includes('negative') ? '#ff5a5a' : '#4dcc80';
+    ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
   });
 
   // Nodes
   netNodes.forEach(n => {
-    const highlighted = !highlightedNode || n.id === highlightedNode;
-    ctx.globalAlpha = highlighted ? 1 : 0.2;
-    const r = 6 + Math.min(n.degree, 12) * 1.5;
+    ctx.globalAlpha = 1;
+    const r = n.isFocus ? 14 : 6 + Math.min(n.degree, 15) * 1.2;
+    // Shadow for focus node
+    if (n.isFocus) {
+      ctx.shadowColor = n.color; ctx.shadowBlur = 18;
+    }
     ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI*2);
     ctx.fillStyle = n.color;
     ctx.fill();
-    // label
+    ctx.shadowBlur = 0;
+    // Label
     ctx.fillStyle = dark ? '#e8e9ea' : '#1a1a18';
-    ctx.font = `${Math.max(9, 11 + n.degree*0.3)}px 'JetBrains Mono', monospace`;
+    const fontSize = n.isFocus ? 13 : Math.max(9, 10 + Math.min(n.degree, 8) * 0.3);
+    ctx.font = `${n.isFocus ? '700 ' : ''}${fontSize}px 'JetBrains Mono', monospace`;
     ctx.textAlign = 'center';
     ctx.fillText(n.id, n.x, n.y - r - 3);
   });
@@ -962,17 +1128,23 @@ function drawNetwork(ctx, canvas) {
   ctx.globalAlpha = 1;
 }
 
-function resetNetwork() { netTransform = {x:0,y:0,scale:1}; buildNetwork(); }
+function resetNetwork() { focusGene = null; document.getElementById('netGeneInput').value = ''; buildNetwork(); }
 
-// Canvas interactions
+// Canvas interaction
 const canvas = document.getElementById('networkCanvas');
 canvas.addEventListener('mousedown', e => {
   const rect = canvas.getBoundingClientRect();
   const mx = (e.clientX - rect.left - netTransform.x) / netTransform.scale;
-  const my = (e.clientY - rect.top - netTransform.y) / netTransform.scale;
-  const hit = netNodes.find(n => Math.hypot(n.x - mx, n.y - my) < 15);
+  const my = (e.clientY - rect.top  - netTransform.y) / netTransform.scale;
+  const hit = netNodes.find(n => {
+    const r = n.isFocus ? 14 : 6 + Math.min(n.degree, 15) * 1.2;
+    return Math.hypot(n.x - mx, n.y - my) < r + 4;
+  });
   if (hit) {
-    highlightedNode = highlightedNode === hit.id ? null : hit.id;
+    // Focus on clicked node
+    focusGene = hit.id;
+    document.getElementById('netGeneInput').value = hit.id;
+    buildNetwork();
   } else {
     dragging = true; lastMouse = {x: e.clientX, y: e.clientY};
   }
@@ -983,42 +1155,45 @@ canvas.addEventListener('mousemove', e => {
   netTransform.y += e.clientY - lastMouse.y;
   lastMouse = {x: e.clientX, y: e.clientY};
 });
-canvas.addEventListener('mouseup', () => { dragging = false; lastMouse = null; });
+canvas.addEventListener('mouseup',  () => { dragging = false; lastMouse = null; });
+canvas.addEventListener('mouseleave',() => { dragging = false; });
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
   const factor = e.deltaY < 0 ? 1.1 : 0.9;
-  netTransform.scale = Math.max(0.3, Math.min(3, netTransform.scale * factor));
+  netTransform.scale = Math.max(0.2, Math.min(4, netTransform.scale * factor));
 }, { passive: false });
+
+// Tooltip on hover
+canvas.addEventListener('mousemove', e => {
+  if (dragging) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left - netTransform.x) / netTransform.scale;
+  const my = (e.clientY - rect.top  - netTransform.y) / netTransform.scale;
+  const hit = netNodes.find(n => {
+    const r = n.isFocus ? 14 : 6 + Math.min(n.degree, 15)*1.2;
+    return Math.hypot(n.x-mx, n.y-my) < r+4;
+  });
+  canvas.style.cursor = hit ? 'pointer' : 'grab';
+});
 
 // ══════════════════════════════════════════
 //  SUMMARY TAB
 // ══════════════════════════════════════════
 function buildSummary() {
-  // Method bars
   const methodCounts = {};
   GI_DATABASE.forEach(r => {
     const m = r.method.split('+')[0].trim();
     methodCounts[m] = (methodCounts[m] || 0) + 1;
   });
   const methodMax = Math.max(...Object.values(methodCounts));
-  const methodLabels = {
-    'classical_genetics': 'Classical genetics',
-    'CRISPRi-TnSeq': 'CRISPRi-TnSeq',
-    'Dual_Tn-seq': 'Dual Tn-seq',
-    'Dual_CRISPRi-Seq': 'Dual CRISPRi-Seq',
-    'population_genomics': 'Population genomics',
-    'Tn-seq': 'Tn-seq',
-    'biochemistry': 'Biochemistry',
-  };
   document.getElementById('methodBars').innerHTML =
     Object.entries(methodCounts).sort((a,b) => b[1]-a[1]).map(([m,c]) => `
       <div class="bar-row">
-        <div class="bar-label">${methodLabels[m] || m}</div>
+        <div class="bar-label">${m}</div>
         <div class="bar-track"><div class="bar-fill" style="width:${(c/methodMax*100).toFixed(0)}%"></div></div>
         <div class="bar-val">${c}</div>
       </div>`).join('');
 
-  // Subtype bars
   const subCounts = {};
   GI_DATABASE.forEach(r => { subCounts[r.subtype] = (subCounts[r.subtype] || 0) + 1; });
   const subMax = Math.max(...Object.values(subCounts));
@@ -1030,7 +1205,6 @@ function buildSummary() {
         <div class="bar-val">${c}</div>
       </div>`).join('');
 
-  // Hub genes
   const degree = {};
   GI_DATABASE.forEach(r => {
     ['gene_a','gene_b'].forEach(k => {
@@ -1042,11 +1216,12 @@ function buildSummary() {
   });
   const hubs = Object.entries(degree).sort((a,b)=>b[1]-a[1]).slice(0,20);
   document.getElementById('hubTable').innerHTML = hubs.map(([g,d]) => `
-    <tr><td><span class="gene-pill">${g}</span></td>
-    <td><div style="flex:1;background:var(--bg-elevated);border-radius:2px;height:4px;width:${Math.round(d/hubs[0][1]*100)}%;background:linear-gradient(to right, var(--accent), var(--positive))"></div></td>
-    <td>${d}</td></tr>`).join('');
+    <tr style="cursor:pointer" onclick="focusGeneNetwork('${g}')">
+      <td><span class="gene-pill">${g}</span></td>
+      <td><div style="height:4px;border-radius:2px;width:${Math.round(d/hubs[0][1]*100)}%;background:linear-gradient(to right,var(--accent),var(--positive))"></div></td>
+      <td>${d}</td>
+    </tr>`).join('');
 
-  // Multi-method
   const geneMethods = {};
   GI_DATABASE.forEach(r => {
     ['gene_a','gene_b'].forEach(k => {
@@ -1059,9 +1234,12 @@ function buildSummary() {
   });
   const multiMethod = Object.entries(geneMethods).filter(([,s])=>s.size>=3).sort((a,b)=>b[1].size-a[1].size);
   document.getElementById('multiMethodTable').innerHTML = multiMethod.map(([g,ms]) => `
-    <tr><td><span class="gene-pill">${g}</span></td><td style="color:var(--text-muted)">${[...ms].map(m=>m.replace('classical_genetics','classical').replace('population_genomics','pop.gen')).join(', ')}</td><td>${ms.size}</td></tr>`).join('');
+    <tr style="cursor:pointer" onclick="focusGeneNetwork('${g}')">
+      <td><span class="gene-pill">${g}</span></td>
+      <td style="color:var(--text-muted)">${[...ms].join(', ')}</td>
+      <td>${ms.size}</td>
+    </tr>`).join('');
 
-  // Sources
   const sources = [
     ['Zik et al. 2025 Science', 'Dual Tn-seq', '533 GIs (244 confident + 289 origin-proximal)', '<a class="doi-link" href="https://doi.org/10.1126/science.adt7685" target="_blank">Open ↗</a>'],
     ['Dénéréaz et al. 2025 Cell Syst', 'Dual CRISPRi-Seq', '6,633 GIs (4,924 negative + 1,709 positive)', '<a class="doi-link" href="https://doi.org/10.1016/j.cels.2025.101408" target="_blank">Open ↗</a>'],
@@ -1077,6 +1255,13 @@ function buildSummary() {
   document.getElementById('sourceTable').innerHTML = sources.map(([ds,m,sc,acc]) =>
     `<tr style="border-bottom:1px solid var(--border)"><td style="padding:var(--space-2) var(--space-3)">${ds}</td><td style="padding:var(--space-2) var(--space-3)">${m}</td><td style="padding:var(--space-2) var(--space-3)">${sc}</td><td style="padding:var(--space-2) var(--space-3)">${acc}</td></tr>`
   ).join('');
+}
+
+// Click hub table row → jump to network with that gene focused
+function focusGeneNetwork(gene) {
+  focusGene = gene;
+  document.getElementById('netGeneInput').value = gene;
+  setTab('network');
 }
 
 // ══════════════════════════════════════════
@@ -1102,6 +1287,7 @@ function downloadCSV() {
 //  INIT
 // ══════════════════════════════════════════
 renderTable();
+populateNetSuggestions();
 </script>
 </body>
 </html>
