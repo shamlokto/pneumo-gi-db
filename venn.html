@@ -3,505 +3,326 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PneumoGI — Overlap Venn</title>
+<title>PneumoGI — Dataset Overlap</title>
 <script src="venn_data.js"></script>
 <style>
-  :root {
-    --bg:        #0f1117;
-    --card:      #1a1d27;
-    --card2:     #21253a;
-    --border:    #2e3245;
-    --text:      #e8ecf4;
-    --muted:     #7a7e94;
-    --accent:    #4e91e8;
-    --negative:  #ff5a5a;
-    --positive:  #4dcc80;
-    --gold:      #ffd556;
-    --zik:       #4e91e8;
-    --dc:        #e07b54;
-    --jan:       #5bbf8a;
-    --font-sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
-    --font-mono: 'JetBrains Mono', 'Fira Mono', monospace;
-    --r:         8px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: var(--font-sans);
-         font-size: 14px; min-height: 100vh; }
+:root {
+  --bg:     #0f1117; --card:   #1a1d27; --card2:  #21253a;
+  --border: #2e3245; --text:   #e8ecf4; --muted:  #7a7e94;
+  --accent: #4e91e8; --neg:    #ff5a5a; --pos:    #4dcc80;
+  --gold:   #ffd556;
+  --c0: #4e91e8; --c1: #e07b54; --c2: #5bbf8a;
+  --c3: #b06cde; --c4: #f5a623; --c5: #4dd9d9;
+  --font-sans: 'Inter','Segoe UI',system-ui,sans-serif;
+  --font-mono: 'JetBrains Mono','Fira Mono',monospace;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-sans); font-size:13px; }
 
-  /* ── TOP BAR ── */
-  header { background: var(--card); border-bottom: 1px solid var(--border);
-           padding: 14px 28px; display: flex; align-items: center; gap: 16px; }
-  header h1 { font-size: 16px; font-weight: 700; color: var(--text); }
-  header h1 em { color: var(--accent); font-style: normal; }
-  .back-btn { text-decoration: none; font-size: 12px; color: var(--muted);
-              border: 1px solid var(--border); padding: 5px 12px;
-              border-radius: 20px; transition: color .2s, border-color .2s; }
-  .back-btn:hover { color: var(--text); border-color: var(--accent); }
-  .header-note { margin-left: auto; font-size: 11px; color: var(--muted); max-width: 420px; text-align: right; line-height: 1.5; }
+header { background:var(--card); border-bottom:1px solid var(--border);
+         padding:12px 24px; display:flex; align-items:center; gap:14px; }
+header h1 { font-size:15px; font-weight:700; }
+header h1 em { color:var(--accent); font-style:normal; }
+.back-btn { text-decoration:none; font-size:11px; color:var(--muted);
+            border:1px solid var(--border); padding:4px 12px; border-radius:20px; }
+.back-btn:hover { color:var(--text); border-color:var(--accent); }
+.hdr-note { margin-left:auto; font-size:11px; color:var(--muted); max-width:380px; text-align:right; line-height:1.5; }
 
-  /* ── LAYOUT ── */
-  .page { display: grid; grid-template-columns: 1fr 380px;
-          grid-template-rows: auto 1fr; gap: 18px;
-          padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+.page { display:grid; grid-template-columns:1fr 340px; gap:16px;
+        padding:18px 22px; max-width:1380px; margin:0 auto; align-items:start; }
 
-  /* ── VIEW TOGGLE ── */
-  .view-toggle { grid-column: 1/-1; display: flex; gap: 8px; align-items: center; }
-  .toggle-btn  { border: 1px solid var(--border); background: transparent; color: var(--muted);
-                 padding: 6px 18px; border-radius: 20px; cursor: pointer; font-size: 12px;
-                 font-family: inherit; transition: all .2s; }
-  .toggle-btn.active { background: var(--card2); color: var(--text); border-color: var(--accent); }
-  .toggle-label { font-size: 12px; color: var(--muted); margin-left: 8px; }
+/* ── METHOD LEGEND ── */
+.method-legend { grid-column:1/-1; display:flex; gap:18px; flex-wrap:wrap;
+                 padding:10px 14px; background:var(--card);
+                 border:1px solid var(--border); border-radius:7px; }
+.leg-item { display:flex; align-items:center; gap:7px; font-size:11.5px; }
+.leg-dot  { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
+.leg-n    { color:var(--muted); font-size:10px; }
 
-  /* ── VENN CANVAS ── */
-  .venn-wrap { background: var(--card); border: 1px solid var(--border);
-               border-radius: var(--r); padding: 20px; position: relative; }
-  #vennSvg { width: 100%; display: block; }
+/* ── UPSET PLOT ── */
+.upset-wrap { background:var(--card); border:1px solid var(--border);
+              border-radius:8px; padding:18px 16px; overflow-x:auto; }
+.upset-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:14px;
+               display:flex; align-items:baseline; gap:10px; }
+.upset-title span { font-size:10px; color:var(--muted); font-weight:400; }
 
-  /* Venn circle region hover */
-  .venn-region { cursor: pointer; transition: opacity .2s; }
-  .venn-region:hover { opacity: 0.85 !important; }
-  .venn-region.selected { stroke: var(--gold) !important; stroke-width: 2.5px; }
+/* Bars at top */
+.bar-section  { display:flex; gap:0; align-items:flex-end;
+                height:160px; margin-bottom:0; padding-left:120px; }
+.bar-col { display:flex; flex-direction:column; align-items:center;
+           cursor:pointer; min-width:38px; }
+.bar-col:hover .bar-rect { filter:brightness(1.25); }
+.bar-col.selected .bar-rect { outline:2px solid var(--gold); outline-offset:1px; }
+.bar-rect { width:26px; border-radius:3px 3px 0 0; transition:filter .15s; }
+.bar-label { font-size:9px; color:var(--muted); margin-top:3px;
+             font-family:var(--font-mono); white-space:nowrap; }
 
-  /* count labels */
-  .venn-label { pointer-events: none; font-family: var(--font-mono); font-weight: 700; }
+/* Matrix */
+.matrix-section { display:flex; }
+.row-labels { display:flex; flex-direction:column; width:120px; flex-shrink:0; }
+.row-label  { height:26px; display:flex; align-items:center; justify-content:flex-end;
+              padding-right:10px; font-size:11px; font-weight:600; white-space:nowrap; }
+.matrix-grid { display:flex; gap:0; }
+.matrix-col  { display:flex; flex-direction:column; min-width:38px; cursor:pointer; }
+.matrix-col:hover .matrix-cell { background:rgba(255,255,255,.04); }
+.matrix-col.selected { background:rgba(255,213,86,.06); }
+.matrix-cell { height:26px; display:flex; align-items:center; justify-content:center; }
+.dot { width:14px; height:14px; border-radius:50%; flex-shrink:0; }
+.dot.filled { }
+.dot.empty  { background:var(--border); }
 
-  /* ── SIDE PANEL ── */
-  .side-panel { background: var(--card); border: 1px solid var(--border);
-                border-radius: var(--r); display: flex; flex-direction: column;
-                overflow: hidden; }
-  .panel-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border);
-                  display: flex; align-items: baseline; gap: 8px; flex-shrink: 0; }
-  .panel-title  { font-size: 13px; font-weight: 700; color: var(--text); }
-  .panel-count  { font-size: 11px; color: var(--muted); }
-  .panel-tabs   { display: flex; gap: 0; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .panel-tab    { flex: 1; padding: 8px 4px; text-align: center; font-size: 11px;
-                  color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent;
-                  transition: color .2s; }
-  .panel-tab.active { color: var(--text); border-bottom-color: var(--accent); }
-  .panel-search { padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .panel-search input { width: 100%; background: var(--bg); border: 1px solid var(--border);
-                        border-radius: 5px; padding: 6px 10px; font-size: 12px;
-                        color: var(--text); font-family: inherit; outline: none; }
-  .panel-search input:focus { border-color: var(--accent); }
-  .panel-body   { flex: 1; overflow-y: auto; padding: 0; }
-  .gene-row     { display: flex; align-items: center; gap: 8px; padding: 8px 14px;
-                  border-bottom: 1px solid var(--border); cursor: pointer;
-                  transition: background .15s; }
-  .gene-row:hover { background: var(--card2); }
-  .gene-pill-sm { background: var(--card2); border: 1px solid var(--border);
-                  border-radius: 4px; padding: 2px 7px; font-family: var(--font-mono);
-                  font-size: 11px; color: var(--text); white-space: nowrap; flex-shrink: 0; }
-  .gene-locus   { font-size: 10px; color: var(--muted); font-family: var(--font-mono);
-                  flex: 1; overflow: hidden; text-overflow: ellipsis; }
-  .gene-count   { font-size: 10px; color: var(--muted); flex-shrink: 0; }
-  .method-dots  { display: flex; gap: 3px; flex-shrink: 0; }
-  .mdot { width: 7px; height: 7px; border-radius: 50%; }
-  .pair-row     { padding: 10px 14px; border-bottom: 1px solid var(--border);
-                  cursor: pointer; transition: background .15s; }
-  .pair-row:hover { background: var(--card2); }
-  .pair-genes   { font-family: var(--font-mono); font-size: 11.5px; font-weight: 700;
-                  color: var(--text); margin-bottom: 4px; }
-  .pair-meta    { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .src-badge    { font-size: 10px; padding: 1px 6px; border-radius: 3px;
-                  background: var(--card2); border: 1px solid; }
+/* Connector line between dots */
+.matrix-col .dot-wrap { position:relative; display:flex; align-items:center; justify-content:center; }
+.connector { position:absolute; width:2px; background:var(--gold); z-index:0; }
 
-  /* ── LEGEND ── */
-  .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px;
-            padding: 0 4px; }
-  .legend-item { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
-  .ldot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+/* Set size bars on right */
+.setsize-section { display:flex; flex-direction:column; margin-left:12px; }
+.setsize-row { height:26px; display:flex; align-items:center; gap:6px; }
+.setsize-bar { height:10px; border-radius:2px; }
+.setsize-val { font-size:10px; color:var(--muted); min-width:28px; }
 
-  /* ── PROMPT CARD ── */
-  .prompt-card { grid-column: 1/-1; background: var(--card2); border: 1px solid var(--border);
-                 border-left: 3px solid var(--gold); border-radius: var(--r);
-                 padding: 12px 16px; font-size: 12px; color: var(--muted); }
-  .prompt-card strong { color: var(--gold); }
+/* ── SIDE PANEL ── */
+.side-panel { background:var(--card); border:1px solid var(--border);
+              border-radius:8px; overflow:hidden; display:flex; flex-direction:column;
+              max-height:calc(100vh - 140px); position:sticky; top:18px; }
+.panel-hdr  { padding:12px 14px 10px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.panel-title{ font-size:12.5px; font-weight:700; }
+.panel-meta { font-size:10px; color:var(--muted); margin-top:2px; }
+.panel-search { padding:8px 12px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.panel-search input { width:100%; background:var(--bg); border:1px solid var(--border);
+                      border-radius:5px; padding:5px 9px; font-size:11.5px;
+                      color:var(--text); font-family:inherit; outline:none; }
+.panel-search input:focus { border-color:var(--accent); }
+.panel-body { overflow-y:auto; flex:1; }
+.gene-row   { display:flex; align-items:center; gap:7px; padding:7px 12px;
+              border-bottom:1px solid var(--border); cursor:pointer; transition:background .12s; }
+.gene-row:hover { background:var(--card2); }
+.gname  { font-family:var(--font-mono); font-size:11px; font-weight:700; flex-shrink:0; }
+.glocus { font-size:10px; color:var(--muted); flex:1; overflow:hidden; text-overflow:ellipsis; }
+.gcnt   { font-size:10px; color:var(--muted); flex-shrink:0; }
+.mdots  { display:flex; gap:3px; flex-shrink:0; }
+.mdot2  { width:6px; height:6px; border-radius:50%; }
 
-  /* ── JUMP LINK ── */
-  .jump-link { font-size: 10px; color: var(--accent); text-decoration: none; margin-left: auto; }
-  .jump-link:hover { text-decoration: underline; }
+.empty-panel { padding:24px 14px; color:var(--muted); font-size:11.5px;
+               text-align:center; line-height:1.8; }
 
-  /* scrollbar */
-  ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
 </style>
 </head>
 <body>
 <header>
   <a href="index.html" class="back-btn">← Database</a>
-  <h1><em>S. pneumoniae</em> Genetic Interaction Overlap</h1>
-  <div class="header-note">
-    Click any region to explore its genes. The 79-gene core shared across all three datasets represents the most robustly detected interaction hubs.
-  </div>
+  <h1><em>S. pneumoniae</em> — Genetic Interaction Dataset Overlap</h1>
+  <div class="hdr-note">Click any bar or column to explore the genes in that intersection. Each column = one unique combination of datasets.</div>
 </header>
 
 <div class="page">
 
-  <!-- VIEW TOGGLE -->
-  <div class="view-toggle">
-    <button class="toggle-btn active" id="btnGene" onclick="setView('gene')">Gene-level</button>
-    <button class="toggle-btn" id="btnPair" onclick="setView('pair')">Gene-pair</button>
-    <span class="toggle-label">Venn regions count unique genes (left) or unique gene pairs (right) per dataset</span>
-  </div>
+  <div class="method-legend" id="methodLegend"></div>
 
-  <!-- VENN -->
-  <div class="venn-wrap">
-    <svg id="vennSvg" viewBox="0 0 700 480" xmlns="http://www.w3.org/2000/svg"></svg>
-    <div class="legend">
-      <div class="legend-item"><div class="ldot" style="background:var(--zik)"></div>Dual Tn-seq · Zik et al. 2025</div>
-      <div class="legend-item"><div class="ldot" style="background:var(--dc)"></div>Dual CRISPRi-Seq · Dénéréaz et al. 2025</div>
-      <div class="legend-item"><div class="ldot" style="background:var(--jan)"></div>CRISPRi-TnSeq · Jana et al. 2024</div>
+  <div class="upset-wrap">
+    <div class="upset-title">
+      UpSet intersection plot
+      <span>Columns = unique combinations of datasets · Height = number of genes exclusive to that combination</span>
     </div>
+    <div id="upsetPlot"></div>
   </div>
 
-  <!-- SIDE PANEL -->
   <div class="side-panel">
-    <div class="panel-header">
-      <div class="panel-title" id="panelTitle">Select a region</div>
-      <div class="panel-count" id="panelCount"></div>
-      <a href="index.html" class="jump-link" id="jumpLink" style="display:none">View in table →</a>
+    <div class="panel-hdr">
+      <div class="panel-title" id="panelTitle">Select a column</div>
+      <div class="panel-meta" id="panelMeta"></div>
     </div>
-    <div class="panel-tabs" id="panelTabs" style="display:none">
-      <div class="panel-tab active" id="tab-genes" onclick="setPanelTab('genes')">Genes</div>
-      <div class="panel-tab" id="tab-pairs" onclick="setPanelTab('pairs')">Shared pairs</div>
-    </div>
-    <div class="panel-search" id="panelSearch" style="display:none">
-      <input id="geneSearchInput" type="search" placeholder="Filter genes…" oninput="renderPanel()">
+    <div class="panel-search" id="panelSearchWrap" style="display:none">
+      <input id="geneSearch" type="search" placeholder="Filter genes…" oninput="renderGeneList()">
     </div>
     <div class="panel-body" id="panelBody">
-      <div style="padding:24px 16px;color:var(--muted);font-size:12px;text-align:center;line-height:1.8">
-        Click a circle region to see<br>the genes in that subset.<br><br>
-        <strong style="color:var(--gold)">Gold centre</strong> = shared across all 3 datasets<br>
-        (79 genes · most robust interaction hubs)
+      <div class="empty-panel">
+        Click any bar in the UpSet plot<br>to see the genes in that subset.<br><br>
+        <strong style="color:var(--gold)">Taller bars</strong> = more genes found<br>
+        exclusively by that combination.
       </div>
     </div>
-  </div>
-
-  <!-- PROMPT CARD -->
-  <div class="prompt-card" id="promptCard">
-    <strong>Tip:</strong> Gene-pair overlap is low by design — each study used different query genes and assay principles (D39W vs D39V, different CRISPRi queries). The gene-level view reveals 79 pleiotropic hubs detected across all three independent methods.
   </div>
 
 </div>
 
 <script>
 const D = VENN_DATA;
-let currentView   = 'gene';   // 'gene' | 'pair'
-let selectedRegion = null;
-let panelTab       = 'genes';
 
-// ── Venn geometry ─────────────────────────────────────────────────────────────
-// Three overlapping circles for ZIK (top-left), DC (top-right), JAN (bottom)
-const W = 700, H = 480;
-const R = 155;
-const CX = { zik: 240, dc: 460, jan: 350 };
-const CY = { zik: 190, dc: 190, jan: 320 };
-
-const REGION_META = {
-  zik_only:     { label:'Zik only',          cx:160, cy:148, color:'var(--zik)',  sets:['zik'] },
-  dc_only:      { label:'DC only',           cx:538, cy:148, color:'var(--dc)',   sets:['dc']  },
-  jan_only:     { label:'Jana only',         cx:350, cy:405, color:'var(--jan)',  sets:['jan'] },
-  zik_dc_only:  { label:'Zik ∩ DC',          cx:350, cy:148, color:'#9baac8',     sets:['zik','dc'] },
-  zik_jan_only: { label:'Zik ∩ Jana',        cx:252, cy:292, color:'#5ab898',     sets:['zik','jan'] },
-  dc_jan_only:  { label:'DC ∩ Jana',         cx:448, cy:292, color:'#c49b76',     sets:['dc','jan'] },
-  all3:         { label:'All three',         cx:350, cy:236, color:'var(--gold)', sets:['zik','dc','jan'] },
+// Method colours
+const METHOD_COLORS = {
+  'Dual Tn-seq':       'var(--c0)',
+  'RB Tn-seq':         'var(--c1)',
+  'Dual CRISPRi-Seq':  'var(--c2)',
+  'CRISPRi-TnSeq':     'var(--c3)',
+  'Classical genetics':'var(--c4)',
+  'Population genomics':'var(--c5)',
 };
+const METHOD_IDS = D.methods;
+const N = METHOD_IDS.length;
+const ROW_H = 26;
 
-function getCount(region) {
-  return currentView === 'gene'
-    ? D.region_counts[region]
-    : D.pair_counts[region];
-}
+let selectedCol = null;
 
-// ── Draw Venn SVG ──────────────────────────────────────────────────────────────
-function drawVenn() {
-  const svg = document.getElementById('vennSvg');
-  svg.innerHTML = '';
+// ── Build legend ──────────────────────────────────────────────────────────────
+document.getElementById('methodLegend').innerHTML = METHOD_IDS.map((m,i) =>
+  `<div class="leg-item">
+    <div class="leg-dot" style="background:${METHOD_COLORS[m]}"></div>
+    <span>${m}</span>
+    <span class="leg-n">${D.method_totals[m].toLocaleString()} interactions · ${D.method_genes[m]} genes</span>
+  </div>`
+).join('');
 
-  const ns = 'http://www.w3.org/2000/svg';
-  function el(tag, attrs, parent) {
-    const e = document.createElementNS(ns, tag);
-    for (const [k,v] of Object.entries(attrs)) e.setAttribute(k, v);
-    (parent||svg).appendChild(e); return e;
-  }
+// ── Filter to meaningful intersections for display ────────────────────────────
+// Show: single-set + multi-set with exclusive > 0, sorted by n_sets desc then exclusive desc
+// Cap at 40 columns
+const cols = D.intersections
+  .filter(ix => ix.exclusive > 0 || ix.sets.length === 1)
+  .sort((a,b) => {
+    if (b.sets.length !== a.sets.length) return b.sets.length - a.sets.length;
+    return b.exclusive - a.exclusive;
+  })
+  .slice(0, 40);
 
-  // Defs: clip paths for each intersection region
-  const defs = el('defs', {});
+// Max bar height
+const maxExcl = Math.max(...cols.map(c => c.exclusive), 1);
+const BAR_MAX_H = 140;
 
-  // Helper: circle path string (approximated by path for clip regions)
-  // We use clipPath combinations to paint each exclusive region
-  function circlePath(cx, cy, r) {
-    return `M ${cx-r},${cy} a ${r},${r} 0 1,0 ${2*r},0 a ${r},${r} 0 1,0 ${-2*r},0`;
-  }
+// ── Render UpSet ──────────────────────────────────────────────────────────────
+function renderUpset() {
+  const wrap = document.getElementById('upsetPlot');
 
-  const clips = { zik: 'cZik', dc: 'cDC', jan: 'cJan' };
-  for (const [id, cid] of Object.entries(clips)) {
-    const cp = el('clipPath', {id: cid}, defs);
-    el('circle', {cx: CX[id], cy: CY[id], r: R}, cp);
-  }
-  // Intersection clip paths
-  const cpZikDC = el('clipPath', {id:'cpZikDC'}, defs);
-  el('circle', {cx:CX.zik, cy:CY.zik, r:R}, cpZikDC);
-  const cpZikJan = el('clipPath', {id:'cpZikJan'}, defs);
-  el('circle', {cx:CX.zik, cy:CY.zik, r:R}, cpZikJan);
-  const cpDCJan  = el('clipPath', {id:'cpDCJan'}, defs);
-  el('circle', {cx:CX.dc,  cy:CY.dc,  r:R}, cpDCJan);
-
-  // Group: clickable regions painted as clipped rects/circles
-  // Paint order: all3 first (bottom), then pairwise, then singles on top
-  // We paint each region as: a large colored circle clipped to the correct region
-
-  // ── All three (centre) ──
-  const g_all3 = el('g', {'clip-path':'url(#cZik)'});
-  const g_all3b = el('g', {'clip-path':'url(#cDC)'}, g_all3);
-  const g_all3c = el('g', {'clip-path':'url(#cJan)'}, g_all3b);
-  const r_all3 = el('rect', {x:0,y:0,width:W,height:H,
-    fill:'rgba(255,213,86,0.55)', class:'venn-region', 'data-region':'all3',
-    style:'cursor:pointer'}, g_all3c);
-
-  // ── Zik ∩ DC (not Jan) ──
-  const g_zd = el('g', {'clip-path':'url(#cZik)'});
-  const g_zd2 = el('g', {'clip-path':'url(#cDC)'}, g_zd);
-  el('rect', {x:0,y:0,width:W,height:H,
-    fill:'rgba(158,178,216,0.55)', class:'venn-region', 'data-region':'zik_dc_only'}, g_zd2);
-  // Mask out Jan
-  el('circle', {cx:CX.jan,cy:CY.jan,r:R, fill:'transparent',
-    stroke:'none', 'pointer-events':'none'}, g_zd2); // mask handled by paint order
-
-  // ── Zik ∩ Jan (not DC) ──
-  const g_zj = el('g', {'clip-path':'url(#cZik)'});
-  const g_zj2 = el('g', {'clip-path':'url(#cJan)'}, g_zj);
-  el('rect', {x:0,y:0,width:W,height:H,
-    fill:'rgba(90,184,152,0.55)', class:'venn-region', 'data-region':'zik_jan_only'}, g_zj2);
-
-  // ── DC ∩ Jan (not Zik) ──
-  const g_dj = el('g', {'clip-path':'url(#cDC)'});
-  const g_dj2 = el('g', {'clip-path':'url(#cJan)'}, g_dj);
-  el('rect', {x:0,y:0,width:W,height:H,
-    fill:'rgba(196,155,118,0.55)', class:'venn-region', 'data-region':'dc_jan_only'}, g_dj2);
-
-  // ── Single circles (drawn on top of intersections to cover them) ──
-  // Each single circle region is painted as a clipped rect, then we paint
-  // the intersection colors on top — simpler: just paint 3 transparent circles
-  // and rely on click detection via hitTest
-
-  // Draw the 3 base circles (visible stroked outlines + light fill)
-  for (const [id, col] of [['zik','var(--zik)'],['dc','var(--dc)'],['jan','var(--jan)']]) {
-    el('circle', {cx:CX[id], cy:CY[id], r:R,
-      fill:col, 'fill-opacity':'0.22',
-      stroke:col, 'stroke-width':'2', 'stroke-opacity':'0.7',
-      'pointer-events':'none'});
-  }
-
-  // Invisible hit areas for single-set regions (large circles minus other 2)
-  // We approximate with a full circle hit area and region detection in JS
-  for (const id of ['zik','dc','jan']) {
-    const rkey = id + '_only';
-    el('circle', {cx:CX[id], cy:CY[id], r:R,
-      fill:'transparent', class:'venn-region hit-circle',
-      'data-region':rkey, style:'cursor:pointer',
-      'stroke-width':'0'});
-  }
-
-  // ── Text labels ──
-  for (const [rkey, meta] of Object.entries(REGION_META)) {
-    const count = getCount(rkey);
-    if (count === 0) continue;
-    const isAll3 = rkey === 'all3';
-    el('text', {
-      x: meta.cx, y: meta.cy,
-      'text-anchor':'middle', 'dominant-baseline':'middle',
-      fill: isAll3 ? '#1a1505' : 'white',
-      'font-size': isAll3 ? '18' : '15',
-      'font-weight':'700',
-      'font-family':'JetBrains Mono, monospace',
-      'pointer-events':'none',
-      class: 'venn-label',
-    }).textContent = count;
-  }
-
-  // ── Click handler ──
-  svg.addEventListener('click', e => {
-    const tgt = e.target.closest('.venn-region');
-    if (!tgt) { clearSelection(); return; }
-
-    // For single-set hit circles, determine actual region by hit-testing
-    let rkey = tgt.dataset.region;
-    if (tgt.classList.contains('hit-circle')) {
-      rkey = resolveRegion(e, tgt.dataset.region.replace('_only',''));
-    }
-    selectRegion(rkey);
-  });
-
-  // Hover tooltip
-  svg.addEventListener('mousemove', e => {
-    const tgt = e.target.closest('.venn-region');
-    svg.style.cursor = tgt ? 'pointer' : 'default';
-  });
-
-  // Highlight selected region
-  if (selectedRegion) highlightRegion(selectedRegion);
-}
-
-function resolveRegion(e, baseSet) {
-  // Given a click on baseSet circle, determine which region (single/pair/triple)
-  const rect = document.getElementById('vennSvg').getBoundingClientRect();
-  const scaleX = 700 / rect.width, scaleY = 480 / rect.height;
-  const mx = (e.clientX - rect.left) * scaleX;
-  const my = (e.clientY - rect.top)  * scaleY;
-  const inZik = dist(mx,my,CX.zik,CY.zik) < R;
-  const inDC  = dist(mx,my,CX.dc, CY.dc)  < R;
-  const inJan = dist(mx,my,CX.jan,CY.jan) < R;
-  if (inZik && inDC && inJan) return 'all3';
-  if (inZik && inDC)  return 'zik_dc_only';
-  if (inZik && inJan) return 'zik_jan_only';
-  if (inDC  && inJan) return 'dc_jan_only';
-  if (inZik) return 'zik_only';
-  if (inDC)  return 'dc_only';
-  if (inJan) return 'jan_only';
-  return baseSet + '_only';
-}
-
-function dist(x1,y1,x2,y2) { return Math.sqrt((x1-x2)**2+(y1-y2)**2); }
-
-function highlightRegion(rkey) {
-  document.querySelectorAll('.venn-region').forEach(el => {
-    el.style.opacity = el.dataset.region === rkey ? '1' : '0.6';
-  });
-}
-function clearHighlight() {
-  document.querySelectorAll('.venn-region').forEach(el => el.style.opacity = '1');
-}
-
-// ── Region selection ───────────────────────────────────────────────────────────
-function selectRegion(rkey) {
-  selectedRegion = rkey;
-  highlightRegion(rkey);
-  const meta  = REGION_META[rkey];
-  const genes = D.region_genes[rkey] || [];
-  const count = getCount(rkey);
-
-  document.getElementById('panelTitle').textContent = meta.label;
-  document.getElementById('panelCount').textContent =
-    `${genes.length} genes · ${count} ${currentView==='gene'?'gene':'pair'} interactions`;
-  document.getElementById('panelTabs').style.display = 'flex';
-  document.getElementById('panelSearch').style.display = 'block';
-  document.getElementById('promptCard').style.display = 'none';
-
-  // Jump to table link
-  const jl = document.getElementById('jumpLink');
-  const setStr = meta.sets.map(s => ({'zik':'ZIK','dc':'DC','jan':'JAN'}[s])).join(',');
-  jl.href = `index.html#search=${rkey}`;
-  jl.style.display = 'block';
-
-  renderPanel();
-}
-
-function clearSelection() {
-  selectedRegion = null;
-  clearHighlight();
-  document.getElementById('panelTitle').textContent = 'Select a region';
-  document.getElementById('panelCount').textContent = '';
-  document.getElementById('panelTabs').style.display = 'none';
-  document.getElementById('panelSearch').style.display = 'none';
-  document.getElementById('jumpLink').style.display = 'none';
-  document.getElementById('promptCard').style.display = 'block';
-  document.getElementById('panelBody').innerHTML =
-    `<div style="padding:24px 16px;color:var(--muted);font-size:12px;text-align:center;line-height:1.8">
-      Click a circle region to see<br>the genes in that subset.<br><br>
-      <strong style="color:var(--gold)">Gold centre</strong> = shared across all 3 datasets<br>
-      (79 genes · most robust interaction hubs)
-    </div>`;
-}
-
-function setPanelTab(tab) {
-  panelTab = tab;
-  document.getElementById('tab-genes').classList.toggle('active', tab==='genes');
-  document.getElementById('tab-pairs').classList.toggle('active', tab==='pairs');
-  document.getElementById('panelSearch').style.display = tab==='genes' ? 'block' : 'none';
-  renderPanel();
-}
-
-function renderPanel() {
-  if (!selectedRegion) return;
-  const body = document.getElementById('panelBody');
-
-  if (panelTab === 'pairs') {
-    // Show shared pairs relevant to this region's sets
-    const meta = REGION_META[selectedRegion];
-    const relevantSets = new Set(meta.sets.map(s => ({'zik':'Dual Tn-seq','dc':'Dual CRISPRi-Seq','jan':'CRISPRi-TnSeq'}[s])));
-    const pairs = D.shared_pairs.filter(p =>
-      p.sources.some(s => relevantSets.has(s))
-    );
-    if (!pairs.length) {
-      body.innerHTML = `<div style="padding:20px;color:var(--muted);font-size:12px;text-align:center">No replicated pairs in this region</div>`;
-      return;
-    }
-    body.innerHTML = pairs.map(p => {
-      const srcBadges = p.sources.map(s => {
-        const col = s.includes('Tn-seq') && !s.includes('CRISPRi') ? 'var(--zik)' :
-                    s.includes('CRISPRi-Seq') ? 'var(--dc)' : 'var(--jan)';
-        return `<span class="src-badge" style="color:${col};border-color:${col}">${s}</span>`;
-      }).join('');
-      const cls = p.class.includes('negative') ? 'var(--negative)' : 'var(--positive)';
-      return `<div class="pair-row" onclick="window.location.href='index.html?search='+encodeURIComponent(p.locus_a)" title="Search for ${p.name_a} × ${p.name_b} in database">
-        <div class="pair-genes">${p.name_a} <span style="color:${cls}">×</span> ${p.name_b}</div>
-        <div class="pair-meta">${srcBadges}
-          <span style="font-size:10px;color:${cls};margin-left:auto">${p.class}</span>
+  // ── Top bars ──
+  let barHTML = `<div class="bar-section">`;
+  cols.forEach((col, ci) => {
+    const h = Math.max(4, Math.round((col.exclusive / maxExcl) * BAR_MAX_H));
+    const col0 = col.sets[0];
+    const colCSS = METHOD_COLORS[col0] || 'var(--accent)';
+    barHTML += `
+      <div class="bar-col${selectedCol===ci?' selected':''}" onclick="selectCol(${ci})">
+        <div style="font-size:9px;color:var(--muted);font-family:var(--font-mono);
+                    margin-bottom:3px;text-align:center">${col.exclusive}</div>
+        <div class="bar-rect" style="height:${h}px;background:${colCSS};
+          ${col.sets.length>1 ? 'background:linear-gradient(135deg,'+col.sets.map(s=>METHOD_COLORS[s]).join(',')+')' : ''}">
         </div>
       </div>`;
-    }).join('');
-    return;
-  }
+  });
+  barHTML += `</div>`;
 
-  // Genes tab
-  const q = document.getElementById('geneSearchInput').value.toLowerCase().trim();
-  let genes = D.region_genes[selectedRegion] || [];
+  // ── Matrix ──
+  // For each column, find the top & bottom filled rows to draw connector
+  let matHTML = `<div class="matrix-section">`;
+  // Row labels
+  matHTML += `<div class="row-labels">`;
+  METHOD_IDS.forEach((m,i) => {
+    matHTML += `<div class="row-label" style="color:${METHOD_COLORS[m]};font-size:11px">${m}</div>`;
+  });
+  matHTML += `</div>`;
+
+  // Matrix columns
+  matHTML += `<div class="matrix-grid">`;
+  cols.forEach((col, ci) => {
+    const inSet = new Set(col.sets);
+    const filledRows = METHOD_IDS.map((m,i) => inSet.has(m) ? i : -1).filter(i=>i>=0);
+    const minRow = Math.min(...filledRows), maxRow = Math.max(...filledRows);
+    const connectorTop  = minRow * ROW_H + ROW_H/2;
+    const connectorH    = (maxRow - minRow) * ROW_H;
+    const needConnector = filledRows.length > 1;
+
+    matHTML += `<div class="matrix-col${selectedCol===ci?' selected':''}" onclick="selectCol(${ci})"
+        style="position:relative">`;
+    if (needConnector) {
+      matHTML += `<div class="connector" style="top:${connectorTop}px;height:${connectorH}px;
+                  left:calc(50% - 1px);background:${METHOD_COLORS[col.sets[0]]}"></div>`;
+    }
+    METHOD_IDS.forEach((m,i) => {
+      const filled = inSet.has(m);
+      matHTML += `<div class="matrix-cell">
+        <div class="dot ${filled?'filled':'empty'}"
+             style="${filled ? 'background:'+METHOD_COLORS[m]+';z-index:1;position:relative' : ''}">
+        </div></div>`;
+    });
+    matHTML += `</div>`;
+  });
+  matHTML += `</div>`;
+
+  // ── Set-size bars (right side) ──
+  const maxSetSize = Math.max(...Object.values(D.method_genes));
+  matHTML += `<div class="setsize-section">`;
+  METHOD_IDS.forEach(m => {
+    const sz = D.method_genes[m];
+    const w  = Math.round((sz / maxSetSize) * 120);
+    matHTML += `<div class="setsize-row">
+      <div class="setsize-bar" style="width:${w}px;background:${METHOD_COLORS[m]}"></div>
+      <span class="setsize-val">${sz}</span>
+    </div>`;
+  });
+  matHTML += `</div>`;
+  matHTML += `</div>`;
+
+  wrap.innerHTML = barHTML + matHTML;
+}
+
+// ── Column selection ──────────────────────────────────────────────────────────
+function selectCol(ci) {
+  selectedCol = ci;
+  renderUpset();
+  renderSidebar(ci);
+}
+
+function renderSidebar(ci) {
+  const col = cols[ci];
+  const setLabel = col.sets.length === 1 ? col.sets[0] : col.sets.join(' ∩ ');
+  document.getElementById('panelTitle').textContent = setLabel;
+  document.getElementById('panelMeta').innerHTML =
+    `<span style="color:var(--gold)">${col.exclusive}</span> exclusive genes &nbsp;·&nbsp;
+     <span>${col.size}</span> total in intersection &nbsp;·&nbsp;
+     <span style="color:var(--muted)">${col.sets.length} dataset${col.sets.length>1?'s':''}</span>`;
+  document.getElementById('panelSearchWrap').style.display = 'block';
+  document.getElementById('geneSearch').value = '';
+  renderGeneList();
+}
+
+function renderGeneList() {
+  if (selectedCol === null) return;
+  const col = cols[selectedCol];
+  const q   = document.getElementById('geneSearch').value.toLowerCase().trim();
+  let genes = col.genes || [];
   if (q) genes = genes.filter(g =>
-    g.name.toLowerCase().includes(q) || g.locus.toLowerCase().includes(q)
+    g.name.toLowerCase().includes(q) || (g.locus||'').toLowerCase().includes(q)
   );
 
   if (!genes.length) {
-    body.innerHTML = `<div style="padding:20px;color:var(--muted);font-size:12px;text-align:center">No results</div>`;
+    document.getElementById('panelBody').innerHTML =
+      `<div class="empty-panel">No genes match "${q}"</div>`;
     return;
   }
 
-  const DOT_COLORS = {'Dual Tn-seq':'var(--zik)','Dual CRISPRi-Seq':'var(--dc)','CRISPRi-TnSeq':'var(--jan)'};
-
-  body.innerHTML = genes.map(g => {
-    const dots = ['Dual Tn-seq','Dual CRISPRi-Seq','CRISPRi-TnSeq'].map(m =>
-      `<div class="mdot" style="background:${g.methods.includes(m) ? DOT_COLORS[m] : 'var(--border)'}"></div>`
+  document.getElementById('panelBody').innerHTML = genes.map(g => {
+    const dots = METHOD_IDS.map(m =>
+      `<div class="mdot2" style="background:${g.methods.includes(m) ? METHOD_COLORS[m] : 'var(--border)'}"></div>`
     ).join('');
-    const isSPD = g.locus !== g.name;
-    const locusSpan = isSPD ? `<span class="gene-locus">${g.locus}</span>` : '';
-    return `<div class="gene-row" onclick="openGene('${g.locus}')" title="Click to view all interactions with ${g.name} in the database">
-      <span class="gene-pill-sm">${g.name}</span>
-      ${locusSpan}
-      <div class="method-dots">${dots}</div>
-      <span class="gene-count">${g.count}</span>
+    const isSPD = g.locus && g.locus !== g.name;
+    return `<div class="gene-row" onclick="openGene('${g.locus || g.name}')">
+      <span class="gname">${g.name}</span>
+      ${isSPD ? `<span class="glocus">${g.locus}</span>` : ''}
+      <div class="mdots">${dots}</div>
+      <span class="gcnt">${g.count}</span>
     </div>`;
   }).join('');
 }
 
 function openGene(query) {
-  // Navigate to main database, pre-filling the search with the canonical locus
   window.location.href = `index.html?search=${encodeURIComponent(query)}`;
 }
 
-// ── View toggle ────────────────────────────────────────────────────────────────
-function setView(v) {
-  currentView = v;
-  document.getElementById('btnGene').classList.toggle('active', v==='gene');
-  document.getElementById('btnPair').classList.toggle('active', v==='pair');
-  drawVenn();
-  if (selectedRegion) renderPanel();
-}
-
-// ── Init ───────────────────────────────────────────────────────────────────────
-drawVenn();
-
-// Auto-select the all3 region to showcase the 79-gene core
-setTimeout(() => selectRegion('all3'), 300);
+// ── Init ──────────────────────────────────────────────────────────────────────
+renderUpset();
+// Auto-select the 4-way intersection (most interesting) if it exists
+const best = cols.findIndex(c => c.sets.length >= 3 && c.exclusive > 0);
+if (best >= 0) setTimeout(() => selectCol(best), 200);
 </script>
 </body>
 </html>

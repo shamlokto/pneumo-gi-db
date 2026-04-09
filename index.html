@@ -502,18 +502,20 @@
       </select>
       <select class="filter-select" id="filterMethod" onchange="renderTable()">
         <option value="">All methods</option>
-        <option value="Dual_Tn-seq">Dual Tn-seq</option>
+        <option value="Dual Tn-seq">Dual Tn-seq</option>
+        <option value="RB Tn-seq">RB Tn-seq</option>
         <option value="CRISPRi-TnSeq">CRISPRi-TnSeq</option>
-        <option value="Dual_CRISPRi-Seq">Dual CRISPRi-Seq</option>
-        <option value="classical_genetics">Classical genetics</option>
-        <option value="population_genomics">Population genomics</option>
-        <option value="Tn-seq">Tn-seq</option>
+        <option value="Dual CRISPRi-Seq">Dual CRISPRi-Seq</option>
+        <option value="Classical genetics">Classical genetics</option>
+        <option value="Population genomics">Population genomics</option>
       </select>
       <select class="filter-select" id="filterVal" onchange="renderTable()">
         <option value="">All validation</option>
-        <option value="confirmed_in_study">Confirmed in study</option>
-        <option value="independently_replicated">Independently replicated</option>
-        <option value="predicted">Predicted</option>
+        <option value="computational">Computational</option>
+        <option value="published">Published / experimental</option>
+        <option value="Synthetic Lethal">Synthetic lethal (confirmed)</option>
+        <option value="Growth Defect">Growth defect (confirmed)</option>
+        <option value="origin_proximal_flag">Origin-proximal region</option>
       </select>
       <span class="results-info" id="resultsInfo"></span>
     </div>
@@ -551,10 +553,11 @@
       <select class="filter-select" id="netFilter" onchange="buildNetwork()">
         <option value="">All methods</option>
         <option value="Dual Tn-seq">Dual Tn-seq</option>
+        <option value="RB Tn-seq">RB Tn-seq</option>
         <option value="CRISPRi-TnSeq">CRISPRi-TnSeq</option>
         <option value="Dual CRISPRi-Seq">Dual CRISPRi-Seq</option>
-        <option value="classical">Classical genetics</option>
-        <option value="suppressor">Suppressor genetics</option>
+        <option value="Classical genetics">Classical genetics</option>
+        <option value="Population genomics">Population genomics</option>
       </select>
       <select class="filter-select" id="netClassFilter" onchange="buildNetwork()">
         <option value="">All classes</option>
