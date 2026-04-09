@@ -467,9 +467,9 @@
       and population genomics studies. Built by the Sham Lab, NUS.
     </p>
     <div class="stats-row" id="statsRow">
-      <div class="stat-chip"><div class="stat-num" id="statTotal">99</div><div class="stat-label">Interactions</div></div>
-      <div class="stat-chip"><div class="stat-num" id="statNeg">44</div><div class="stat-label">Negative GIs</div></div>
-      <div class="stat-chip"><div class="stat-num" id="statPos">53</div><div class="stat-label">Positive GIs</div></div>
+      <div class="stat-chip"><div class="stat-num" id="statTotal">8645</div><div class="stat-label">Interactions</div></div>
+      <div class="stat-chip"><div class="stat-num" id="statNeg">6259</div><div class="stat-label">Negative GIs</div></div>
+      <div class="stat-chip"><div class="stat-num" id="statPos">2337</div><div class="stat-label">Positive GIs</div></div>
       <div class="stat-chip"><div class="stat-num">14</div><div class="stat-label">Papers</div></div>
       <div class="stat-chip"><div class="stat-num">6</div><div class="stat-label">Methods</div></div>
       <div class="stat-chip"><div class="stat-num">4026</div><div class="stat-label">PneumoGIN GIs</div></div>
@@ -614,7 +614,7 @@
     <div style="text-align:center;padding:var(--space-8)">
       <button class="export-btn" onclick="downloadCSV()">⬇ Download Full Database CSV</button>
       <p style="margin-top:var(--space-4);font-size:var(--text-xs);color:var(--text-muted)">
-        99 curated interactions · Sham Lab, NUS · Last updated April 2026
+        8,645 interactions · Zik 2025 · Dénéréaz 2025 · Jana 2024 · Classical genetics · Sham Lab, NUS · Last updated April 2026
       </p>
     </div>
   </div>
@@ -1063,9 +1063,9 @@ function buildSummary() {
 
   // Sources
   const sources = [
-    ['Zik et al. 2025 Science', 'Dual Tn-seq', '244 GIs', '<a class="doi-link" href="https://doi.org/10.1126/science.adt7685" target="_blank">Open ↗</a>'],
-    ['Dénéréaz et al. 2025 Cell Syst', 'Dual CRISPRi-Seq', '4,026 GIs', '<a class="doi-link" href="https://veeninglab.shinyapps.io/PneumoGIN" target="_blank">PneumoGIN ↗</a>'],
-    ['Jana et al. 2024 Nat Microbiol', 'CRISPRi-TnSeq', '1,334 GIs', '<a class="doi-link" href="https://doi.org/10.1038/s41564-024-01759-x" target="_blank">Open ↗</a>'],
+    ['Zik et al. 2025 Science', 'Dual Tn-seq', '533 GIs (244 confident + 289 origin-proximal)', '<a class="doi-link" href="https://doi.org/10.1126/science.adt7685" target="_blank">Open ↗</a>'],
+    ['Dénéréaz et al. 2025 Cell Syst', 'Dual CRISPRi-Seq', '6,633 GIs (4,924 negative + 1,709 positive)', '<a class="doi-link" href="https://doi.org/10.1016/j.cels.2025.101408" target="_blank">Open ↗</a>'],
+    ['Jana et al. 2024 Nat Microbiol', 'CRISPRi-TnSeq', '1,334 GIs (754 negative + 580 positive)', '<a class="doi-link" href="https://doi.org/10.1038/s41564-024-01759-x" target="_blank">Open ↗</a>'],
     ['Skwark et al. 2017 PLoS Genet', 'genomeDCA', '5,199 couplings', '<a class="doi-link" href="https://doi.org/10.1371/journal.pgen.1006508" target="_blank">Open ↗</a>'],
     ['Tsui et al. 2016 Mol Microbiol', 'Classical genetics', 'Targeted', '<a class="doi-link" href="https://pubmed.ncbi.nlm.nih.gov/26933838/" target="_blank">PMC ↗</a>'],
     ['Zheng et al. 2017 Mol Microbiol', 'Classical genetics', 'Targeted', '<a class="doi-link" href="https://doi.org/10.1111/mmi.13847" target="_blank">PMC ↗</a>'],
