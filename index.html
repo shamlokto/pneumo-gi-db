@@ -681,49 +681,32 @@ function methodBadge(m) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  LOCUS ALIAS INDEX
-//  Maps any query string → set of canonical gene_a display names
-//  so that searching "spd_0912", "SPV_0912", "pbp2x" etc. all work
+//  CANONICAL GENE SEARCH
+//  CANONICAL_MAP (from data.js) maps every alias → SPD_#### key.
+//  Each record has ca/cb = canonical SPD_#### for gene_a/gene_b.
+//  Searching any alias finds ALL records for that gene, regardless
+//  of which locus tag format was used in the original dataset.
 // ══════════════════════════════════════════════════════════════════
-const ALIAS_INDEX = (() => {
-  // map: normalised alias → Set of gene display names present in DB
-  const idx = {};
-  function add(alias, name) {
-    const k = alias.toLowerCase().replace(/[\s_]/g, '');
-    if (!idx[k]) idx[k] = new Set();
-    idx[k].add(name);
-  }
-  GI_DATABASE.forEach(r => {
-    [['gene_a', 'gene_a_locus'], ['gene_b', 'gene_b_locus']].forEach(([gk, lk]) => {
-      const name  = r[gk]  || '';
-      const locus = r[lk]  || '';
-      if (name)  { add(name,  name); add(locus, name); }
-      // Also add numeric suffix alone: "spd0912" → name, "0912" → name
-      const m = locus.match(/(\d{4,})$/);
-      if (m) add(m[1], name);
-      // SPV ↔ SPD equivalence (same number)
-      if (locus.startsWith('SPD_')) add('SPV_' + locus.slice(4), name);
-      if (locus.startsWith('SPV_')) add('SPD_' + locus.slice(4), name);
-    });
-  });
-  return idx;
-})();
-
 function resolveQuery(q) {
-  // Returns a Set of canonical gene names that match the query, or null for no restriction
+  // Returns a canonical key (SPD_####) to match against r.ca / r.cb,
+  // or null if no canonical match (fall back to text search).
   if (!q) return null;
-  const k = q.toLowerCase().replace(/[\s_]/g, '');
-  // Direct alias hit
-  if (ALIAS_INDEX[k]) return ALIAS_INDEX[k];
-  // Partial match: find all alias keys that contain q (for short queries ≥3 chars)
-  if (k.length >= 3) {
-    const merged = new Set();
-    for (const [alias, names] of Object.entries(ALIAS_INDEX)) {
-      if (alias.includes(k)) names.forEach(n => merged.add(n));
+  const norm = q.toLowerCase().trim().replace(/_/g, '');
+  // Direct lookup in CANONICAL_MAP
+  if (CANONICAL_MAP[norm])           return CANONICAL_MAP[norm];
+  // Also try with underscores preserved (for SPD_RS##### style)
+  const normU = q.toLowerCase().trim();
+  if (CANONICAL_MAP[normU])          return CANONICAL_MAP[normU];
+  // Partial match across canonical map keys (≥3 chars)
+  if (norm.length >= 3) {
+    const hits = new Set();
+    for (const [alias, canon] of Object.entries(CANONICAL_MAP)) {
+      if (alias.includes(norm)) hits.add(canon);
     }
-    if (merged.size) return merged;
+    if (hits.size === 1) return [...hits][0];   // unambiguous partial match
+    if (hits.size > 1 && hits.size <= 20) return [...hits]; // small set: match any
   }
-  return null;  // fall back to text search
+  return null;  // fall back to free-text search
 }
 
 // ══════════════════════════════════════════
@@ -767,7 +750,7 @@ function filterData() {
   const meth = document.getElementById('filterMethod').value;
   const val  = document.getElementById('filterVal').value;
 
-  // Resolve aliases for gene search
+  // Resolve query to canonical gene ID(s)
   const resolved = resolveQuery(raw);
 
   filteredData = GI_DATABASE.filter(r => {
@@ -775,12 +758,16 @@ function filterData() {
     if (!q) {
       matchQ = true;
     } else if (resolved) {
-      // Match if gene_a OR gene_b is in the resolved set
-      matchQ = resolved.has(r.gene_a) || resolved.has(r.gene_b);
+      // resolved is a canonical SPD_#### string, or array of them
+      if (Array.isArray(resolved)) {
+        matchQ = resolved.includes(r.ca) || resolved.includes(r.cb);
+      } else {
+        matchQ = r.ca === resolved || r.cb === resolved;
+      }
     } else {
-      // Fallback: plain text search across all fields
+      // Fallback: plain text search across all fields + canonical IDs
       matchQ = [r.id, r.gene_a, r.gene_b, r.gene_a_locus, r.gene_b_locus,
-        r.method, r.subtype, r.strain, r.func_a, r.func_b, r.quote]
+        r.ca, r.cb, r.method, r.subtype, r.strain, r.func_a, r.func_b, r.quote]
         .join(' ').toLowerCase().includes(q);
     }
     const matchCls  = !cls  || r.class === cls;
@@ -908,7 +895,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModalDi
 //  NETWORK — gene-focused ego graph
 // ══════════════════════════════════════════
 let netNodes = [], netEdges = [], netTransform = {x:0, y:0, scale:1};
-let dragging = false, lastMouse = null, focusGene = null;
+let dragging = false, lastMouse = null, focusGene = null, focusCanon = null;
 let animFrame = 0;
 
 function nodeColor(g) {
@@ -932,20 +919,28 @@ function populateNetSuggestions() {
 function netFocusFromInput() {
   const v = document.getElementById('netGeneInput').value.trim();
   if (!v) { netClearFocus(); return; }
-  // Resolve aliases → canonical name
-  const resolved = resolveQuery(v);
-  if (resolved && resolved.size > 0) {
-    // Pick the first (most commonly used) resolved name, or try exact match first
-    const exact = [...resolved].find(n => n.toLowerCase() === v.toLowerCase());
-    focusGene = exact || [...resolved][0];
+  // Resolve to canonical SPD_#### then find the display name for it
+  const canon = resolveQuery(v);
+  if (canon && !Array.isArray(canon)) {
+    // Find the most common display name for this canonical ID
+    const counts = {};
+    GI_DATABASE.forEach(r => {
+      if (r.ca === canon) counts[r.gene_a] = (counts[r.gene_a]||0) + 1;
+      if (r.cb === canon) counts[r.gene_b] = (counts[r.gene_b]||0) + 1;
+    });
+    const names = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+    focusGene = names.length ? names[0][0] : v;
+    // Also store canonical for sidebar matching
+    focusCanon = canon;
   } else {
-    focusGene = v;
+    focusGene  = v;
+    focusCanon = canon && Array.isArray(canon) ? null : null;
   }
   buildNetwork();
 }
 
 function netClearFocus() {
-  focusGene = null;
+  focusGene = null; focusCanon = null;
   document.getElementById('netGeneInput').value = '';
   document.getElementById('netSidebar').style.display = 'none';
   buildNetwork();
@@ -969,7 +964,8 @@ function buildNetwork() {
 
   // ── If a gene is focused, show ego graph (1-hop neighbourhood only) ────────
   if (focusGene) {
-    data = data.filter(r => r.gene_a === focusGene || r.gene_b === focusGene);
+    data = data.filter(r => r.gene_a === focusGene || r.gene_b === focusGene
+      || (focusCanon && (r.ca === focusCanon || r.cb === focusCanon)));
     updateSidebar(data);
   } else {
     // Without focus: cap at 800 rows to keep canvas responsive
