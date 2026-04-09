@@ -468,9 +468,9 @@
       and population genomics studies. Built by the Sham Lab, NUS.
     </p>
     <div class="stats-row" id="statsRow">
-      <div class="stat-chip"><div class="stat-num" id="statTotal">8645</div><div class="stat-label">Interactions</div></div>
-      <div class="stat-chip"><div class="stat-num" id="statNeg">6259</div><div class="stat-label">Negative GIs</div></div>
-      <div class="stat-chip"><div class="stat-num" id="statPos">2337</div><div class="stat-label">Positive GIs</div></div>
+      <div class="stat-chip"><div class="stat-num" id="statTotal">10914</div><div class="stat-label">Interactions</div></div>
+      <div class="stat-chip"><div class="stat-num" id="statNeg">7550</div><div class="stat-label">Negative GIs</div></div>
+      <div class="stat-chip"><div class="stat-num" id="statPos">3316</div><div class="stat-label">Positive GIs</div></div>
       <div class="stat-chip"><div class="stat-num">14</div><div class="stat-label">Papers</div></div>
       <div class="stat-chip"><div class="stat-num">6</div><div class="stat-label">Methods</div></div>
       <div class="stat-chip"><div class="stat-num">4026</div><div class="stat-label">PneumoGIN GIs</div></div>
@@ -629,7 +629,7 @@
     <div style="text-align:center;padding:var(--space-8)">
       <button class="export-btn" onclick="downloadCSV()">⬇ Download Full Database CSV</button>
       <p style="margin-top:var(--space-4);font-size:var(--text-xs);color:var(--text-muted)">
-        8,645 interactions · Zik 2025 · Dénéréaz 2025 · Jana 2024 · Classical genetics · Sham Lab, NUS · Last updated April 2026
+        10,914 interactions · Zik 2025 (Dual Tn-seq + RB Tn-seq) · Dénéréaz 2025 · Jana 2024 · Classical genetics · Sham Lab, NUS · Last updated April 2026
       </p>
     </div>
   </div>
@@ -967,8 +967,11 @@ function buildNetwork() {
 
   // ── If a gene is focused, show ego graph (1-hop neighbourhood only) ────────
   if (focusGene) {
-    data = data.filter(r => r.gene_a === focusGene || r.gene_b === focusGene
-      || (focusCanon && (r.ca === focusCanon || r.cb === focusCanon)));
+    // Match by canonical ID (primary) OR display name (fallback)
+    data = data.filter(r =>
+      (focusCanon && (r.ca === focusCanon || r.cb === focusCanon)) ||
+      r.gene_a === focusGene || r.gene_b === focusGene
+    );
     updateSidebar(data);
   } else {
     // Without focus: cap at 800 rows to keep canvas responsive
@@ -995,7 +998,9 @@ function buildNetwork() {
       if (!nodeMap[partner]) neighbours.push(partner);
       nodeMap[partner] = nodeMap[partner] || null; // placeholder
     });
-    const uniqueNeighbours = [...new Set(data.map(r => r.gene_a === focusGene ? r.gene_b : r.gene_a))];
+    const uniqueNeighbours = [...new Set(data.map(r =>
+      (focusCanon && r.ca === focusCanon) || r.gene_a === focusGene ? r.gene_b : r.gene_a
+    ))];
     const radius = Math.min(W * 0.38, 240);
     uniqueNeighbours.forEach((g, i) => {
       const angle = (i / uniqueNeighbours.length) * 2 * Math.PI - Math.PI / 2;
@@ -1039,8 +1044,10 @@ function updateSidebar(data) {
 
   function partnerRows(rows, cls) {
     return rows.map(r => {
-      const partner = r.gene_a === focusGene ? r.gene_b : r.gene_a;
-      const locus   = r.gene_a === focusGene ? r.gene_b_locus : r.gene_a_locus;
+      // Match by canonical ID or display name
+      const isA   = r.ca === focusCanon || r.gene_a === focusGene;
+      const partner = isA ? r.gene_b : r.gene_a;
+      const locus   = isA ? r.gene_b_locus : r.gene_a_locus;
       const score   = r.score ? parseFloat(r.score).toFixed(2) : '';
       return `<div style="padding:3px 0;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;align-items:center"
         onclick="openModal('${r.id}')">
