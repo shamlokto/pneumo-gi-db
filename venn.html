@@ -444,7 +444,7 @@ function renderPanel() {
         return `<span class="src-badge" style="color:${col};border-color:${col}">${s}</span>`;
       }).join('');
       const cls = p.class.includes('negative') ? 'var(--negative)' : 'var(--positive)';
-      return `<div class="pair-row" onclick="window.open('index.html','_blank')">
+      return `<div class="pair-row" onclick="window.location.href='index.html?search='+encodeURIComponent(p.locus_a)" title="Search for ${p.name_a} × ${p.name_b} in database">
         <div class="pair-genes">${p.name_a} <span style="color:${cls}">×</span> ${p.name_b}</div>
         <div class="pair-meta">${srcBadges}
           <span style="font-size:10px;color:${cls};margin-left:auto">${p.class}</span>
@@ -474,7 +474,7 @@ function renderPanel() {
     ).join('');
     const isSPD = g.locus !== g.name;
     const locusSpan = isSPD ? `<span class="gene-locus">${g.locus}</span>` : '';
-    return `<div class="gene-row" onclick="openGene('${g.locus || g.name}')">
+    return `<div class="gene-row" onclick="openGene('${g.locus}')" title="Click to view all interactions with ${g.name} in the database">
       <span class="gene-pill-sm">${g.name}</span>
       ${locusSpan}
       <div class="method-dots">${dots}</div>
@@ -484,7 +484,8 @@ function renderPanel() {
 }
 
 function openGene(query) {
-  window.open(`index.html?search=${encodeURIComponent(query)}`, '_blank');
+  // Navigate to main database, pre-filling the search with the canonical locus
+  window.location.href = `index.html?search=${encodeURIComponent(query)}`;
 }
 
 // ── View toggle ────────────────────────────────────────────────────────────────

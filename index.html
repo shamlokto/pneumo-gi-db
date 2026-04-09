@@ -1315,8 +1315,29 @@ function downloadCSV() {
 // ══════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════
-renderTable();
-populateNetSuggestions();
+// ── Read URL search param and pre-fill search box ────────────────────────────
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const q = params.get('search');
+  if (q) {
+    const decoded = decodeURIComponent(q);
+    document.getElementById('searchInput').value = decoded;
+    // After render, scroll to the table and briefly highlight the search box
+    renderTable();
+    populateNetSuggestions();
+    requestAnimationFrame(() => {
+      const wrap = document.querySelector('.table-wrap');
+      if (wrap) wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const input = document.getElementById('searchInput');
+      input.style.transition = 'box-shadow 0.3s';
+      input.style.boxShadow = '0 0 0 3px rgba(78,145,232,0.5)';
+      setTimeout(() => { input.style.boxShadow = ''; }, 2000);
+    });
+  } else {
+    renderTable();
+    populateNetSuggestions();
+  }
+})();
 </script>
 </body>
 </html>
