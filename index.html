@@ -650,6 +650,36 @@
 </div>
 
 <script>
+// ══════════════════════════════════════════
+//  BADGE HELPERS
+// ══════════════════════════════════════════
+function classBadge(cls) {
+  if (!cls) return '<span class="badge badge-mixed">—</span>';
+  if (cls.includes('negative')) return `<span class="badge badge-negative">${cls}</span>`;
+  if (cls.includes('positive')) return `<span class="badge badge-positive">${cls}</span>`;
+  return `<span class="badge badge-mixed">${cls}</span>`;
+}
+function valBadge(v) {
+  if (!v) return '<span class="badge badge-val-predicted">—</span>';
+  const vl = v.toLowerCase();
+  if (vl.includes('lethal') || vl.includes('growth') || vl.includes('colony') || vl === 'confirmed')
+    return `<span class="badge badge-val-confirmed">${v}</span>`;
+  if (vl.includes('replicated') || vl.includes('published'))
+    return `<span class="badge badge-val-replicated">${v}</span>`;
+  if (vl === 'untested' || vl === 'no change' || vl === 'computational' || vl === 'origin_proximal_flag')
+    return `<span class="badge badge-val-predicted">${v}</span>`;
+  return `<span class="badge badge-val-predicted">${v}</span>`;
+}
+function methodBadge(m) {
+  if (!m) return '';
+  const short = m.split('+')[0].trim()
+    .replace('classical genetics','classical')
+    .replace('population_genomics','pop.gen')
+    .replace('suppressor_genetics','suppressor')
+    .replace('biochemistry','biochem');
+  return `<span class="badge-method">${short}</span>`;
+}
+
 // ══════════════════════════════════════════════════════════════════
 //  LOCUS ALIAS INDEX
 //  Maps any query string → set of canonical gene_a display names
