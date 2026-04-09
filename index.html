@@ -451,6 +451,7 @@
       <button class="nav-btn" onclick="setTab('table')">Database</button>
       <button class="nav-btn" onclick="setTab('network')">Network</button>
       <button class="nav-btn" onclick="setTab('summary')">Summary</button>
+      <a href="venn.html" class="nav-btn" style="text-decoration:none">⬡ Overlap Venn</a>
       <button class="nav-btn" onclick="downloadCSV()">⬇ CSV</button>
       <button class="theme-btn" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
     </nav>
@@ -767,7 +768,7 @@ function filterData() {
     } else {
       // Fallback: plain text search across all fields + canonical IDs
       matchQ = [r.id, r.gene_a, r.gene_b, r.gene_a_locus, r.gene_b_locus,
-        r.ca, r.cb, r.method, r.subtype, r.strain, r.func_a, r.func_b, r.quote]
+        r.ca, r.cb, r.method, r.subtype, r.strain, r.func_a, r.func_b, r.cog_a, r.cog_b, r.quote]
         .join(' ').toLowerCase().includes(q);
     }
     const matchCls  = !cls  || r.class === cls;
@@ -876,6 +877,8 @@ function openModal(id) {
     ['Gene B Essentiality', r.ess_b],
     ['Gene A Function', r.func_a, true],
     ['Gene B Function', r.func_b, true],
+    ['Gene A COG', r.cog_a ? `<span style="font-family:var(--font-display);font-weight:700">${r.cog_a}</span> ${r.func_a||''}` : '', false],
+    ['Gene B COG', r.cog_b ? `<span style="font-family:var(--font-display);font-weight:700">${r.cog_b}</span> ${r.func_b||''}` : '', false],
     ['PMID', r.pmid ? `<a class="doi-link" href="https://pubmed.ncbi.nlm.nih.gov/${r.pmid}" target="_blank">${r.pmid} ↗</a>` : '—'],
     ['DOI',  r.doi  ? `<a class="doi-link" href="https://doi.org/${r.doi}" target="_blank">${r.doi} ↗</a>` : '—'],
   ];
