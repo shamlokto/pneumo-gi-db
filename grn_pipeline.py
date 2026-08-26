@@ -47,8 +47,59 @@ sns.set_style('whitegrid')
 
 # ── Constants ──
 QUERY_GENES = ['ackA', 'cdsA', 'yqeH', 'ccrZ', 'ezrA', 'tsaC', 'mreC']
+# Fallback locus tags for query genes not in RNA-seq annotation
+# (sourced from PneumoWiki — S. pneumoniae D39, CP000410.2)
+QUERY_GENE_LOCI = {
+    'ackA': 'SPD_1853', 'cdsA': 'SPD_0244', 'yqeH': 'SPD_1559',
+    'ccrZ': 'SPD_0476', 'ezrA': 'SPD_0710', 'tsaC': 'SPD_0908',
+    'mreC': 'SPD_2045',
+}
+# COG functional category one-letter codes mapped from bracket-text keywords
+COG_CATEGORY_MAP = [
+    ('Translation', 'J'), ('Transcription', 'K'),
+    ('DNA replication', 'L'), ('Cell division', 'D'),
+    ('Posttranslational modification', 'O'), ('Cell envelope', 'M'),
+    ('Cell motility', 'N'), ('Inorganic ion transport', 'P'),
+    ('Signal transduction', 'T'), ('Energy production', 'C'),
+    ('Carbohydrate transport', 'G'), ('Amino acid transport', 'E'),
+    ('Nucleotide transport', 'F'), ('Coenzyme metabolism', 'H'),
+    ('Lipid metabolism', 'I'), ('Secondary metabolites', 'Q'),
+    ('General function', 'R'), ('Function unknown', 'S'),
+    ('Defense mechanisms', 'V'), ('Extracellular structures', 'W'),
+    ('Intracellular trafficking', 'U'),
+]
+COG_CODE_NAMES = {
+    'J': 'Translation', 'K': 'Transcription', 'L': 'DNA replication/repair',
+    'D': 'Cell division', 'O': 'Posttranslational modification',
+    'M': 'Cell envelope', 'N': 'Cell motility', 'P': 'Inorganic ion transport',
+    'T': 'Signal transduction', 'C': 'Energy production',
+    'G': 'Carbohydrate metabolism', 'E': 'Amino acid metabolism',
+    'F': 'Nucleotide metabolism', 'H': 'Coenzyme metabolism',
+    'I': 'Lipid metabolism', 'Q': 'Secondary metabolites',
+    'R': 'General function', 'S': 'Function unknown',
+    'V': 'Defense mechanisms', 'W': 'Extracellular structures',
+    'U': 'Intracellular trafficking',
+}
 STRING_API = 'https://string-db.org/api'
 SPECIES = 1313  # S. pneumoniae
+
+
+def extract_cog_category(cog_str: str) -> str:
+    """Extract COG one-letter functional category from full COG description.
+    e.g. 'gnl|CDD|...;COG1197, Mfd, ... [DNA replication.../ Transcription].'
+    -> 'L'"""
+    if not cog_str or cog_str == '-':
+        return '-'
+    # Extract text in brackets [...]
+    m = re.search(r'\[([^\]]+)\]', cog_str)
+    if not m:
+        return '-'
+    bracket_text = m.group(1)
+    # Map first matching keyword to one-letter code
+    for keyword, code in COG_CATEGORY_MAP:
+        if keyword.lower() in bracket_text.lower():
+            return code
+    return '-'
 
 
 @dataclass
@@ -63,6 +114,7 @@ class Config:
     string_score: float = 0.7
     string_species: int = SPECIES
     de_fdr: float = 0.05
+    de_logfc: float = 1.0  # effect-size threshold for DE calling
     top_hubs: int = 20
 
 
@@ -277,26 +329,27 @@ def load_rbtnseq_fitness(path: str) -> pd.DataFrame:
 
 def fetch_string_ppi(gene_names: List[str], species: int,
                      score_threshold: float) -> pd.DataFrame:
-    """Batch-query STRING API for PPI edges."""
+    """Query STRING API for PPI edges — all identifiers in one request to
+    capture cross-batch interactions. Falls back to overlapping batches if
+    the API enforces a per-request identifier limit."""
     all_edges = []
-    batch_size = 450
-    batches = [gene_names[i:i+batch_size]
-               for i in range(0, len(gene_names), batch_size)]
-    print(f"  STRING API: {len(gene_names)} genes in {len(batches)} batches (score > {score_threshold})")
-    for i, batch in enumerate(batches):
-        identifiers = '%0d'.join(batch)
+    score_param = int(score_threshold * 1000)
+
+    def _query_network(identifiers: List[str], label: str) -> int:
+        """Query STRING /network endpoint and append edges. Returns count."""
         params = {
-            'identifiers': identifiers,
+            'identifiers': '\n'.join(identifiers),
             'species': species,
-            'required_score': int(score_threshold * 1000),
+            'required_score': score_param,
             'limit': 10000,
         }
         try:
             resp = requests.get(
                 f'{STRING_API}/tsv-no-header/network',
-                params=params, timeout=60
+                params=params, timeout=120
             )
             if resp.status_code == 200 and resp.text.strip():
+                count = 0
                 for line in resp.text.strip().split('\n'):
                     parts = line.split('\t')
                     if len(parts) >= 7:
@@ -308,10 +361,38 @@ def fetch_string_ppi(gene_names: List[str], species: int,
                             'score': float(parts[5]),
                             'source': 'STRING',
                         })
-            print(f"    Batch {i+1}/{len(batches)}: +{len(resp.text.strip().split(chr(10))) if resp.text.strip() else 0} edges")
+                        count += 1
+                print(f"    {label}: +{count} edges")
+                return count
+            else:
+                print(f"    {label}: HTTP {resp.status_code}, {len(resp.text)} bytes")
+                return 0
         except Exception as e:
-            print(f"    Batch {i+1}/{len(batches)}: ERROR - {e}")
-        time.sleep(0.5)
+            print(f"    {label}: ERROR - {e}")
+            return 0
+
+    print(f"  STRING API: {len(gene_names)} genes (score > {score_threshold})")
+
+    # Try all identifiers in one request first
+    n = _query_network(gene_names, 'All-at-once')
+    time.sleep(0.5)
+
+    if n == 0:
+        # Fallback: batched queries with cross-batch coverage
+        # Use overlapping batches so cross-batch interactions are captured
+        batch_size = 450
+        batches = [gene_names[i:i+batch_size]
+                   for i in range(0, len(gene_names), batch_size)]
+        print(f"  Fallback: {len(batches)} batches with cross-batch queries")
+        for i, batch in enumerate(batches):
+            _query_network(batch, f'Batch {i+1}/{len(batches)}')
+            time.sleep(0.5)
+        # Cross-batch: query each batch paired with the next
+        for i in range(len(batches) - 1):
+            combined = batches[i] + batches[i + 1]
+            _query_network(combined, f'Cross-batch {i+1}-{i+2}')
+            time.sleep(0.5)
+
     df = pd.DataFrame(all_edges)
     if not df.empty:
         df = df.drop_duplicates(subset=['gene_a', 'gene_b'])
@@ -373,9 +454,14 @@ def build_network(s3_df: pd.DataFrame, s1_df: pd.DataFrame,
             row = rnaseq_indexed.loc[locus]
             attrs['logFC'] = float(row['logFC']) if pd.notna(row['logFC']) else None
             attrs['FDR'] = float(row['FDR']) if pd.notna(row['FDR']) else None
-            attrs['is_de'] = bool(attrs['FDR'] is not None and attrs['FDR'] < config.de_fdr)
-            cog = str(row.get('COG', '-'))
-            attrs['cog_category'] = cog if cog else '-'
+            # DE requires both FDR and effect-size thresholds
+            attrs['is_de'] = bool(
+                attrs['FDR'] is not None and attrs['FDR'] < config.de_fdr
+                and attrs['logFC'] is not None and abs(attrs['logFC']) >= config.de_logfc
+            )
+            cog_full = str(row.get('COG', '-'))
+            attrs['cog_category'] = extract_cog_category(cog_full) if cog_full else '-'
+            attrs['cog_description'] = cog_full if cog_full else '-'
             attrs['product'] = str(row.get('Product', '-'))
             attrs['go_bp'] = str(row.get('GO_Biological_Process', '-'))
             attrs['kegg'] = str(row.get('KEGG', '-'))
@@ -461,7 +547,7 @@ def build_network(s3_df: pd.DataFrame, s1_df: pd.DataFrame,
 def find_locus_for_gene(gene_name: str, locus_map: Dict[str, str],
                         rnaseq_df: pd.DataFrame) -> Optional[str]:
     """Find locus tag for a gene name."""
-    # Reverse mapping
+    # Reverse mapping from RNA-seq annotation
     for locus, name in locus_map.items():
         if name == gene_name:
             return locus
@@ -470,6 +556,9 @@ def find_locus_for_gene(gene_name: str, locus_map: Dict[str, str],
         matches = rnaseq_df[rnaseq_df['GeneName'] == gene_name]
         if not matches.empty:
             return str(matches.iloc[0]['locus_tag']).strip()
+    # Fallback: hardcoded mapping for query genes not in RNA-seq annotation
+    if gene_name in QUERY_GENE_LOCI:
+        return QUERY_GENE_LOCI[gene_name]
     return None
 
 
@@ -606,7 +695,7 @@ def test_de_enrichment(comm_map: Dict[str, int], G: nx.MultiDiGraph,
 
 
 def characterize_cog(comm_map: Dict[str, int], G: nx.MultiDiGraph) -> pd.DataFrame:
-    """Characterize each community by dominant COG category."""
+    """Characterize each community by dominant COG functional category (one-letter code)."""
     results = []
     communities = sorted(set(comm_map.values()))
     # Get genome-wide COG distribution
@@ -622,8 +711,8 @@ def characterize_cog(comm_map: Dict[str, int], G: nx.MultiDiGraph) -> pd.DataFra
         for g in comm_genes:
             cog = G.nodes[g].get('cog_category', '-')
             cog_counts[cog] = cog_counts.get(cog, 0) + 1
-        # Dominant COG (excluding '-')
-        dominant = max((k for k in cog_counts if k != '-'),
+        # Dominant COG (excluding '-' and 'S' unknown function)
+        dominant = max((k for k in cog_counts if k not in ('-', 'S')),
                        key=lambda k: cog_counts[k], default='-')
         dom_count = cog_counts.get(dominant, 0)
         n = len(comm_genes)
@@ -634,17 +723,26 @@ def characterize_cog(comm_map: Dict[str, int], G: nx.MultiDiGraph) -> pd.DataFra
             _, pval = stats.fisher_exact(table, alternative='greater')
         except Exception:
             pval = 1.0
+        dom_name = COG_CODE_NAMES.get(dominant, '-')
         results.append({
             'community': c,
             'size': n,
             'dominant_cog': dominant,
+            'dominant_cog_name': dom_name,
             'dominant_cog_count': dom_count,
             'dominant_cog_fraction': dom_count / n if n > 0 else 0,
             'pvalue': pval,
             'cog_distribution': json.dumps(cog_counts),
         })
     df = pd.DataFrame(results)
-    print(f"  COG characterization: {len(df)} communities annotated")
+    # FDR-correct the COG dominance p-values
+    from statsmodels.stats.multitest import multipletests
+    if len(df) > 1:
+        _, df['padj_cog'], _, _ = multipletests(df['pvalue'], method='fdr_bh')
+    else:
+        df['padj_cog'] = df['pvalue']
+    n_sig = (df['padj_cog'] < 0.05).sum()
+    print(f"  COG characterization: {len(df)} communities annotated, {n_sig} with significant COG enrichment (padj < 0.05)")
     return df
 
 
@@ -1019,6 +1117,7 @@ canvas{display:block}
 <button class="nb act" onclick="showTab('table')">Interaction Table</button>
 <button class="nb" onclick="showTab('network')">Network View</button>
 <button class="nb" onclick="showTab('summary')">Summary &amp; Hubs</button>
+<a class="nb" href="venn.html" style="text-decoration:none">Venn Diagram</a>
 <button class="tb" onclick="toggleTheme()" id="themeBtn">◐</button>
 </div>
 </div></div>
@@ -1420,6 +1519,7 @@ def main():
     parser.add_argument('--string-score', type=float, default=0.7, help='STRING confidence threshold')
     parser.add_argument('--string-species', type=int, default=1313, help='STRING species ID')
     parser.add_argument('--de-fdr', type=float, default=0.05, help='FDR threshold for DE genes')
+    parser.add_argument('--de-logfc', type=float, default=1.0, help='|logFC| threshold for DE genes')
     parser.add_argument('--top-hubs', type=int, default=20, help='Number of hub genes to report')
     args = parser.parse_args()
 
@@ -1429,7 +1529,7 @@ def main():
         table_s4=args.table_s4, output_dir=args.output_dir,
         z_threshold=args.z_threshold, string_score=args.string_score,
         string_species=args.string_species, de_fdr=args.de_fdr,
-        top_hubs=args.top_hubs,
+        de_logfc=args.de_logfc, top_hubs=args.top_hubs,
     )
 
     # Create output directories
