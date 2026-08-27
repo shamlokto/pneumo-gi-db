@@ -4,180 +4,155 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PneumoGI — Dataset Overlap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="venn_data.js"></script>
 <style>
-:root {
-  --bg:     #0f1117; --card:   #1a1d27; --card2:  #21253a;
-  --border: #2e3245; --text:   #e8ecf4; --muted:  #7a7e94;
-  --accent: #4e91e8; --neg:    #ff5a5a; --pos:    #4dcc80;
-  --gold:   #ffd556;
-  --c0: #4e91e8; --c1: #e07b54; --c2: #5bbf8a;
-  --c3: #b06cde; --c4: #f5a623; --c5: #4dd9d9;
-  --font-sans: 'Inter','Segoe UI',system-ui,sans-serif;
-  --font-mono: 'JetBrains Mono','Fira Mono',monospace;
-}
-* { box-sizing:border-box; margin:0; padding:0; }
-body { background:var(--bg); color:var(--text); font-family:var(--font-sans); font-size:13px; }
+:root{--font-d:'JetBrains Mono',monospace;--font-b:'Inter',system-ui,sans-serif;--r-m:8px;--r-l:12px;--t:.18s ease}
+:root,[data-theme="light"]{--bg:#f4f4f0;--srf:#fff;--elv:#f0efea;--bd:rgba(0,0,0,.1);--tx:#1a1a18;--tx2:#555550;--txm:#888880;--ac:#0066cc;--acs:rgba(0,102,204,.1);--sh:0 1px 3px rgba(0,0,0,.08)}
+[data-theme="dark"]{--bg:#0d0e0f;--srf:#161718;--elv:#1e2022;--bd:rgba(255,255,255,.08);--tx:#e8e9ea;--tx2:#9a9b9d;--txm:#5e6062;--ac:#4d9fff;--acs:rgba(77,159,255,.12);--sh:0 1px 3px rgba(0,0,0,.4)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-b);font-size:13px;background:var(--bg);color:var(--tx);line-height:1.6;-webkit-font-smoothing:antialiased;transition:background var(--t),color var(--t)}
 
-header { background:var(--card); border-bottom:1px solid var(--border);
-         padding:12px 24px; display:flex; align-items:center; gap:14px; }
-header h1 { font-size:15px; font-weight:700; }
-header h1 em { color:var(--accent); font-style:normal; }
-.back-btn { text-decoration:none; font-size:11px; color:var(--muted);
-            border:1px solid var(--border); padding:4px 12px; border-radius:20px; }
-.back-btn:hover { color:var(--text); border-color:var(--accent); }
-.hdr-note { margin-left:auto; font-size:11px; color:var(--muted); max-width:380px; text-align:right; line-height:1.5; }
+.hdr{position:sticky;top:0;z-index:100;background:var(--srf);border-bottom:1px solid var(--bd);backdrop-filter:blur(12px)}
+.hdr-i{max-width:1400px;margin:0 auto;padding:1rem 1.5rem;display:flex;align-items:center;gap:1rem}
+.logo{display:flex;align-items:center;gap:.75rem;text-decoration:none;color:var(--tx)}
+.logo-t{font-family:var(--font-d);font-size:1.125rem;font-weight:600;letter-spacing:-.03em}
+.logo-t span{color:var(--ac)}
+.logo-s{font-size:.75rem;color:var(--txm);text-transform:uppercase;letter-spacing:.04em}
+.nav{display:flex;gap:.5rem;margin-left:auto;align-items:center}
+.nb{background:none;border:1px solid var(--bd);border-radius:var(--r-m);padding:.5rem 1rem;font-family:var(--font-b);font-size:.875rem;color:var(--tx2);cursor:pointer;transition:all var(--t);text-decoration:none}
+.nb:hover{background:var(--elv);color:var(--tx)}
+.tb{background:none;border:1px solid var(--bd);border-radius:var(--r-m);width:36px;height:36px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--tx2);transition:all var(--t)}
+.tb:hover{background:var(--elv);color:var(--tx)}
 
-.page { display:grid; grid-template-columns:1fr 340px; gap:16px;
-        padding:18px 22px; max-width:1380px; margin:0 auto; align-items:start; }
+.hero{background:var(--srf);border-bottom:1px solid var(--bd);padding:2rem 1.5rem 1.5rem}
+.hero-i{max-width:1400px;margin:0 auto}
+.hero-t{font-family:var(--font-d);font-size:1.75rem;font-weight:600;letter-spacing:-.04em;line-height:1.1;margin-bottom:.5rem}
+.hero-t em{color:var(--ac);font-style:normal}
+.hero-s{color:var(--tx2);max-width:640px;font-size:.875rem;line-height:1.7}
 
-/* ── METHOD LEGEND ── */
-.method-legend { grid-column:1/-1; display:flex; gap:18px; flex-wrap:wrap;
-                 padding:10px 14px; background:var(--card);
-                 border:1px solid var(--border); border-radius:7px; }
-.leg-item { display:flex; align-items:center; gap:7px; font-size:11.5px; }
-.leg-dot  { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
-.leg-n    { color:var(--muted); font-size:10px; }
+.page{display:grid;grid-template-columns:1fr 340px;gap:16px;padding:18px 22px;max-width:1400px;margin:0 auto;align-items:start}
 
-/* ── UPSET PLOT ── */
-.upset-wrap { background:var(--card); border:1px solid var(--border);
-              border-radius:8px; padding:18px 16px; overflow-x:auto; }
-.upset-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:14px;
-               display:flex; align-items:baseline; gap:10px; }
-.upset-title span { font-size:10px; color:var(--muted); font-weight:400; }
+.method-legend{grid-column:1/-1;display:flex;gap:18px;flex-wrap:wrap;padding:10px 14px;background:var(--srf);border:1px solid var(--bd);border-radius:var(--r-l)}
+.leg-item{display:flex;align-items:center;gap:7px;font-size:11.5px}
+.leg-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.leg-n{color:var(--txm);font-size:10px}
 
-/* Bars at top */
-.bar-section  { display:flex; gap:0; align-items:flex-end;
-                height:160px; margin-bottom:0; padding-left:120px; }
-.bar-col { display:flex; flex-direction:column; align-items:center;
-           cursor:pointer; min-width:38px; }
-.bar-col:hover .bar-rect { filter:brightness(1.25); }
-.bar-col.selected .bar-rect { outline:2px solid var(--gold); outline-offset:1px; }
-.bar-rect { width:26px; border-radius:3px 3px 0 0; transition:filter .15s; }
-.bar-label { font-size:9px; color:var(--muted); margin-top:3px;
-             font-family:var(--font-mono); white-space:nowrap; }
+.upset-wrap{background:var(--srf);border:1px solid var(--bd);border-radius:var(--r-l);padding:18px 16px;overflow-x:auto}
+.upset-title{font-size:13px;font-weight:700;color:var(--tx);margin-bottom:14px;display:flex;align-items:baseline;gap:10px}
+.upset-title span{font-size:10px;color:var(--txm);font-weight:400}
 
-/* Matrix */
-.matrix-section { display:flex; }
-.row-labels { display:flex; flex-direction:column; width:120px; flex-shrink:0; }
-.row-label  { height:26px; display:flex; align-items:center; justify-content:flex-end;
-              padding-right:10px; font-size:11px; font-weight:600; white-space:nowrap; }
-.matrix-grid { display:flex; gap:0; }
-.matrix-col  { display:flex; flex-direction:column; min-width:38px; cursor:pointer; }
-.matrix-col:hover .matrix-cell { background:rgba(255,255,255,.04); }
-.matrix-col.selected { background:rgba(255,213,86,.06); }
-.matrix-cell { height:26px; display:flex; align-items:center; justify-content:center; }
-.dot { width:14px; height:14px; border-radius:50%; flex-shrink:0; }
-.dot.filled { }
-.dot.empty  { background:var(--border); }
+.bar-section{display:flex;gap:0;align-items:flex-end;height:160px;margin-bottom:0;padding-left:120px}
+.bar-col{display:flex;flex-direction:column;align-items:center;cursor:pointer;min-width:38px}
+.bar-col:hover .bar-rect{filter:brightness(1.25)}
+.bar-col.selected .bar-rect{outline:2px solid #ffc800;outline-offset:1px}
+.bar-rect{width:26px;border-radius:3px 3px 0 0;transition:filter .15s}
+.bar-label{font-size:9px;color:var(--txm);margin-top:3px;font-family:var(--font-d);white-space:nowrap}
 
-/* Connector line between dots */
-.matrix-col .dot-wrap { position:relative; display:flex; align-items:center; justify-content:center; }
-.connector { position:absolute; width:2px; background:var(--gold); z-index:0; }
+.matrix-section{display:flex}
+.row-labels{display:flex;flex-direction:column;width:120px;flex-shrink:0}
+.row-label{height:26px;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;font-size:11px;font-weight:600;white-space:nowrap}
+.matrix-grid{display:flex;gap:0}
+.matrix-col{display:flex;flex-direction:column;min-width:38px;cursor:pointer;position:relative}
+.matrix-col:hover .matrix-cell{background:rgba(128,128,128,.06)}
+.matrix-col.selected{background:rgba(255,200,0,.06)}
+.matrix-cell{height:26px;display:flex;align-items:center;justify-content:center}
+.dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+.dot.empty{background:var(--bd)}
+.connector{position:absolute;width:2px;z-index:0;left:calc(50% - 1px)}
 
-/* Set size bars on right */
-.setsize-section { display:flex; flex-direction:column; margin-left:12px; }
-.setsize-row { height:26px; display:flex; align-items:center; gap:6px; }
-.setsize-bar { height:10px; border-radius:2px; }
-.setsize-val { font-size:10px; color:var(--muted); min-width:28px; }
+.setsize-section{display:flex;flex-direction:column;margin-left:12px}
+.setsize-row{height:26px;display:flex;align-items:center;gap:6px}
+.setsize-bar{height:10px;border-radius:2px}
+.setsize-val{font-size:10px;color:var(--txm);min-width:28px}
 
-/* ── SIDE PANEL ── */
-.side-panel { background:var(--card); border:1px solid var(--border);
-              border-radius:8px; overflow:hidden; display:flex; flex-direction:column;
-              max-height:calc(100vh - 140px); position:sticky; top:18px; }
-.panel-hdr  { padding:12px 14px 10px; border-bottom:1px solid var(--border); flex-shrink:0; }
-.panel-title{ font-size:12.5px; font-weight:700; }
-.panel-meta { font-size:10px; color:var(--muted); margin-top:2px; }
-.panel-search { padding:8px 12px; border-bottom:1px solid var(--border); flex-shrink:0; }
-.panel-search input { width:100%; background:var(--bg); border:1px solid var(--border);
-                      border-radius:5px; padding:5px 9px; font-size:11.5px;
-                      color:var(--text); font-family:inherit; outline:none; }
-.panel-search input:focus { border-color:var(--accent); }
-.panel-body { overflow-y:auto; flex:1; }
-.gene-row   { display:flex; align-items:center; gap:7px; padding:7px 12px;
-              border-bottom:1px solid var(--border); cursor:pointer; transition:background .12s; }
-.gene-row:hover { background:var(--card2); }
-.gname  { font-family:var(--font-mono); font-size:11px; font-weight:700; flex-shrink:0; }
-.glocus { font-size:10px; color:var(--muted); flex:1; overflow:hidden; text-overflow:ellipsis; }
-.gcnt   { font-size:10px; color:var(--muted); flex-shrink:0; }
-.mdots  { display:flex; gap:3px; flex-shrink:0; }
-.mdot2  { width:6px; height:6px; border-radius:50%; }
+.side-panel{background:var(--srf);border:1px solid var(--bd);border-radius:var(--r-l);overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 220px);position:sticky;top:18px}
+.panel-hdr{padding:12px 14px 10px;border-bottom:1px solid var(--bd);flex-shrink:0}
+.panel-title{font-size:12.5px;font-weight:700}
+.panel-meta{font-size:10px;color:var(--txm);margin-top:2px}
+.panel-search{padding:8px 12px;border-bottom:1px solid var(--bd);flex-shrink:0}
+.panel-search input{width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:5px;padding:5px 9px;font-size:11.5px;color:var(--tx);font-family:inherit;outline:none}
+.panel-search input:focus{border-color:var(--ac)}
+.panel-body{overflow-y:auto;flex:1}
+.gene-row{display:flex;align-items:center;gap:7px;padding:7px 12px;border-bottom:1px solid var(--bd);cursor:pointer;transition:background .12s}
+.gene-row:hover{background:var(--elv)}
+.gname{font-family:var(--font-d);font-size:11px;font-weight:700;flex-shrink:0}
+.glocus{font-size:10px;color:var(--txm);flex:1;overflow:hidden;text-overflow:ellipsis}
+.gcnt{font-size:10px;color:var(--txm);flex-shrink:0}
+.mdots{display:flex;gap:3px;flex-shrink:0}
+.mdot2{width:6px;height:6px;border-radius:50%}
+.empty-panel{padding:24px 14px;color:var(--txm);font-size:11.5px;text-align:center;line-height:1.8}
 
-.empty-panel { padding:24px 14px; color:var(--muted); font-size:11.5px;
-               text-align:center; line-height:1.8; }
+.ftr{border-top:1px solid var(--bd);padding:1.5rem;text-align:center;color:var(--txm);font-size:.75rem}
 
-::-webkit-scrollbar { width:4px; }
-::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px}
 </style>
 </head>
 <body>
-<header>
-  <a href="index.html" class="back-btn">← Database</a>
-  <h1><em>S. pneumoniae</em> — Genetic Interaction Dataset Overlap</h1>
-  <div class="hdr-note">Click any bar or column to explore the genes in that intersection. Each column = one unique combination of datasets.</div>
-</header>
+<div class="hdr"><div class="hdr-i">
+<a class="logo" href="index.html"><div class="logo-t">Pneumo<span>GI</span></div><div class="logo-s">Dataset Overlap</div></a>
+<div class="nav">
+<a class="nb" href="index.html">← Database</a>
+<button class="tb" onclick="toggleTheme()" id="themeBtn">◐</button>
+</div>
+</div></div>
+
+<div class="hero"><div class="hero-i">
+<h1 class="hero-t"><em>S. pneumoniae</em> — Network Layer Gene Overlap</h1>
+<p class="hero-s">UpSet intersection plot showing gene overlap across the 4 network layers: Dual Tn-seq genetic interactions, Sup-seq suppression, STRING PPI, and RNA-seq differential expression. Click any bar or column to explore the genes in that intersection.</p>
+</div></div>
 
 <div class="page">
-
-  <div class="method-legend" id="methodLegend"></div>
-
-  <div class="upset-wrap">
-    <div class="upset-title">
-      UpSet intersection plot
-      <span>Columns = unique combinations of datasets · Height = number of genes exclusive to that combination</span>
-    </div>
-    <div id="upsetPlot"></div>
-  </div>
-
-  <div class="side-panel">
-    <div class="panel-hdr">
-      <div class="panel-title" id="panelTitle">Select a column</div>
-      <div class="panel-meta" id="panelMeta"></div>
-    </div>
-    <div class="panel-search" id="panelSearchWrap" style="display:none">
-      <input id="geneSearch" type="search" placeholder="Filter genes…" oninput="renderGeneList()">
-    </div>
-    <div class="panel-body" id="panelBody">
-      <div class="empty-panel">
-        Click any bar in the UpSet plot<br>to see the genes in that subset.<br><br>
-        <strong style="color:var(--gold)">Taller bars</strong> = more genes found<br>
-        exclusively by that combination.
-      </div>
-    </div>
-  </div>
-
+<div class="method-legend" id="methodLegend"></div>
+<div class="upset-wrap">
+<div class="upset-title">UpSet intersection plot<span>Columns = unique combinations of layers · Height = number of genes exclusive to that combination</span></div>
+<div id="upsetPlot"></div>
 </div>
+<div class="side-panel">
+<div class="panel-hdr">
+<div class="panel-title" id="panelTitle">Select a column</div>
+<div class="panel-meta" id="panelMeta"></div>
+</div>
+<div class="panel-search" id="panelSearchWrap" style="display:none">
+<input id="geneSearch" type="search" placeholder="Filter genes…" oninput="renderGeneList()">
+</div>
+<div class="panel-body" id="panelBody">
+<div class="empty-panel">Click any bar in the UpSet plot<br>to see the genes in that subset.<br><br><strong style="color:#ffc800">Taller bars</strong> = more genes found<br>exclusively by that combination.</div>
+</div>
+</div>
+</div>
+
+<div class="ftr">PneumoGI · Dual Tn-seq + Sup-seq + STRING PPI + RNA-seq DE · Sham Lab NUS</div>
 
 <script>
 const D = VENN_DATA;
-
-// Method colours
 const METHOD_COLORS = {
-  'Dual Tn-seq':       'var(--c0)',
-  'RB Tn-seq':         'var(--c1)',
-  'Dual CRISPRi-Seq':  'var(--c2)',
-  'CRISPRi-TnSeq':     'var(--c3)',
-  'Classical genetics':'var(--c4)',
-  'Population genomics':'var(--c5)',
+  'Dual Tn-seq':  '#0279EE',
+  'Sup-seq':      '#FF9400',
+  'STRING PPI':   '#75A025',
+  'RNA-seq DE':   '#FD9BED',
 };
 const METHOD_IDS = D.methods;
 const N = METHOD_IDS.length;
 const ROW_H = 26;
-
 let selectedCol = null;
 
-// ── Build legend ──────────────────────────────────────────────────────────────
-document.getElementById('methodLegend').innerHTML = METHOD_IDS.map((m,i) =>
+function toggleTheme(){
+  const h=document.documentElement;
+  h.setAttribute('data-theme',h.getAttribute('data-theme')==='dark'?'light':'dark');
+}
+
+document.getElementById('methodLegend').innerHTML = METHOD_IDS.map(m =>
   `<div class="leg-item">
     <div class="leg-dot" style="background:${METHOD_COLORS[m]}"></div>
     <span>${m}</span>
-    <span class="leg-n">${D.method_totals[m].toLocaleString()} interactions · ${D.method_genes[m]} genes</span>
+    <span class="leg-n">${D.method_totals[m].toLocaleString()} edges · ${D.method_genes[m]} genes</span>
   </div>`
 ).join('');
 
-// ── Filter to meaningful intersections for display ────────────────────────────
-// Show: single-set + multi-set with exclusive > 0, sorted by n_sets desc then exclusive desc
-// Cap at 40 columns
 const cols = D.intersections
   .filter(ix => ix.exclusive > 0 || ix.sets.length === 1)
   .sort((a,b) => {
@@ -186,24 +161,19 @@ const cols = D.intersections
   })
   .slice(0, 40);
 
-// Max bar height
 const maxExcl = Math.max(...cols.map(c => c.exclusive), 1);
 const BAR_MAX_H = 140;
 
-// ── Render UpSet ──────────────────────────────────────────────────────────────
 function renderUpset() {
   const wrap = document.getElementById('upsetPlot');
-
-  // ── Top bars ──
   let barHTML = `<div class="bar-section">`;
   cols.forEach((col, ci) => {
     const h = Math.max(4, Math.round((col.exclusive / maxExcl) * BAR_MAX_H));
     const col0 = col.sets[0];
-    const colCSS = METHOD_COLORS[col0] || 'var(--accent)';
+    const colCSS = METHOD_COLORS[col0] || '#4d9fff';
     barHTML += `
       <div class="bar-col${selectedCol===ci?' selected':''}" onclick="selectCol(${ci})">
-        <div style="font-size:9px;color:var(--muted);font-family:var(--font-mono);
-                    margin-bottom:3px;text-align:center">${col.exclusive}</div>
+        <div style="font-size:9px;color:var(--txm);font-family:var(--font-d);margin-bottom:3px;text-align:center">${col.exclusive}</div>
         <div class="bar-rect" style="height:${h}px;background:${colCSS};
           ${col.sets.length>1 ? 'background:linear-gradient(135deg,'+col.sets.map(s=>METHOD_COLORS[s]).join(',')+')' : ''}">
         </div>
@@ -211,36 +181,30 @@ function renderUpset() {
   });
   barHTML += `</div>`;
 
-  // ── Matrix ──
-  // For each column, find the top & bottom filled rows to draw connector
   let matHTML = `<div class="matrix-section">`;
-  // Row labels
   matHTML += `<div class="row-labels">`;
-  METHOD_IDS.forEach((m,i) => {
-    matHTML += `<div class="row-label" style="color:${METHOD_COLORS[m]};font-size:11px">${m}</div>`;
+  METHOD_IDS.forEach(m => {
+    matHTML += `<div class="row-label" style="color:${METHOD_COLORS[m]}">${m}</div>`;
   });
   matHTML += `</div>`;
 
-  // Matrix columns
   matHTML += `<div class="matrix-grid">`;
   cols.forEach((col, ci) => {
     const inSet = new Set(col.sets);
     const filledRows = METHOD_IDS.map((m,i) => inSet.has(m) ? i : -1).filter(i=>i>=0);
     const minRow = Math.min(...filledRows), maxRow = Math.max(...filledRows);
-    const connectorTop  = minRow * ROW_H + ROW_H/2;
-    const connectorH    = (maxRow - minRow) * ROW_H;
+    const connectorTop = minRow * ROW_H + ROW_H/2;
+    const connectorH = (maxRow - minRow) * ROW_H;
     const needConnector = filledRows.length > 1;
 
-    matHTML += `<div class="matrix-col${selectedCol===ci?' selected':''}" onclick="selectCol(${ci})"
-        style="position:relative">`;
+    matHTML += `<div class="matrix-col${selectedCol===ci?' selected'}" onclick="selectCol(${ci})">`;
     if (needConnector) {
-      matHTML += `<div class="connector" style="top:${connectorTop}px;height:${connectorH}px;
-                  left:calc(50% - 1px);background:${METHOD_COLORS[col.sets[0]]}"></div>`;
+      matHTML += `<div class="connector" style="top:${connectorTop}px;height:${connectorH}px;background:${METHOD_COLORS[col.sets[0]]}"></div>`;
     }
-    METHOD_IDS.forEach((m,i) => {
+    METHOD_IDS.forEach(m => {
       const filled = inSet.has(m);
       matHTML += `<div class="matrix-cell">
-        <div class="dot ${filled?'filled':'empty'}"
+        <div class="dot ${filled?'':'empty'}"
              style="${filled ? 'background:'+METHOD_COLORS[m]+';z-index:1;position:relative' : ''}">
         </div></div>`;
     });
@@ -248,12 +212,11 @@ function renderUpset() {
   });
   matHTML += `</div>`;
 
-  // ── Set-size bars (right side) ──
   const maxSetSize = Math.max(...Object.values(D.method_genes));
   matHTML += `<div class="setsize-section">`;
   METHOD_IDS.forEach(m => {
     const sz = D.method_genes[m];
-    const w  = Math.round((sz / maxSetSize) * 120);
+    const w = Math.round((sz / maxSetSize) * 120);
     matHTML += `<div class="setsize-row">
       <div class="setsize-bar" style="width:${w}px;background:${METHOD_COLORS[m]}"></div>
       <span class="setsize-val">${sz}</span>
@@ -265,7 +228,6 @@ function renderUpset() {
   wrap.innerHTML = barHTML + matHTML;
 }
 
-// ── Column selection ──────────────────────────────────────────────────────────
 function selectCol(ci) {
   selectedCol = ci;
   renderUpset();
@@ -277,9 +239,9 @@ function renderSidebar(ci) {
   const setLabel = col.sets.length === 1 ? col.sets[0] : col.sets.join(' ∩ ');
   document.getElementById('panelTitle').textContent = setLabel;
   document.getElementById('panelMeta').innerHTML =
-    `<span style="color:var(--gold)">${col.exclusive}</span> exclusive genes &nbsp;·&nbsp;
+    `<span style="color:#ffc800">${col.exclusive}</span> exclusive genes &nbsp;·&nbsp;
      <span>${col.size}</span> total in intersection &nbsp;·&nbsp;
-     <span style="color:var(--muted)">${col.sets.length} dataset${col.sets.length>1?'s':''}</span>`;
+     <span style="color:var(--txm)">${col.sets.length} layer${col.sets.length>1?'s':''}</span>`;
   document.getElementById('panelSearchWrap').style.display = 'block';
   document.getElementById('geneSearch').value = '';
   renderGeneList();
@@ -288,7 +250,7 @@ function renderSidebar(ci) {
 function renderGeneList() {
   if (selectedCol === null) return;
   const col = cols[selectedCol];
-  const q   = document.getElementById('geneSearch').value.toLowerCase().trim();
+  const q = document.getElementById('geneSearch').value.toLowerCase().trim();
   let genes = col.genes || [];
   if (q) genes = genes.filter(g =>
     g.name.toLowerCase().includes(q) || (g.locus||'').toLowerCase().includes(q)
@@ -302,7 +264,7 @@ function renderGeneList() {
 
   document.getElementById('panelBody').innerHTML = genes.map(g => {
     const dots = METHOD_IDS.map(m =>
-      `<div class="mdot2" style="background:${g.methods.includes(m) ? METHOD_COLORS[m] : 'var(--border)'}"></div>`
+      `<div class="mdot2" style="background:${g.methods.includes(m) ? METHOD_COLORS[m] : 'var(--bd)'}"></div>`
     ).join('');
     const isSPD = g.locus && g.locus !== g.name;
     return `<div class="gene-row" onclick="openGene('${g.locus || g.name}')">
@@ -318,9 +280,7 @@ function openGene(query) {
   window.location.href = `index.html?search=${encodeURIComponent(query)}`;
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────────
 renderUpset();
-// Auto-select the 4-way intersection (most interesting) if it exists
 const best = cols.findIndex(c => c.sets.length >= 3 && c.exclusive > 0);
 if (best >= 0) setTimeout(() => selectCol(best), 200);
 </script>
