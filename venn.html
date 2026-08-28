@@ -101,14 +101,14 @@ body{font-family:var(--font-b);font-size:13px;background:var(--bg);color:var(--t
 </div></div>
 
 <div class="hero"><div class="hero-i">
-<h1 class="hero-t"><em>S. pneumoniae</em> — Network Layer Gene Overlap</h1>
-<p class="hero-s">UpSet intersection plot showing gene overlap across the 4 network layers: Dual Tn-seq genetic interactions, Sup-seq suppression, STRING PPI, and RNA-seq differential expression. Click any bar or column to explore the genes in that intersection.</p>
+<h1 class="hero-t"><em>S. pneumoniae</em> — Study Gene Overlap</h1>
+<p class="hero-s">UpSet intersection plot showing overlap of all tested genes across four S. pneumoniae studies: Dual Tn-seq and RB Tn-seq (this study), Opijnen Tn-seq (all studies), and Veening CRISPRi (single + dual). Gene sets are unified in SPD_ (D39W) locus-tag space via orthology mapping. Click any bar or column to explore the genes in that intersection.</p>
 </div></div>
 
 <div class="page">
 <div class="method-legend" id="methodLegend"></div>
 <div class="upset-wrap">
-<div class="upset-title">UpSet intersection plot<span>Columns = unique combinations of layers · Height = number of genes exclusive to that combination</span></div>
+<div class="upset-title">UpSet intersection plot<span>Columns = unique combinations of studies · Height = number of genes exclusive to that combination</span></div>
 <div id="upsetPlot"></div>
 </div>
 <div class="side-panel">
@@ -125,15 +125,15 @@ body{font-family:var(--font-b);font-size:13px;background:var(--bg);color:var(--t
 </div>
 </div>
 
-<div class="ftr">PneumoGI · Dual Tn-seq + Sup-seq + STRING PPI + RNA-seq DE · Sham Lab NUS</div>
+<div class="ftr">PneumoGI · Dual Tn-seq + RB Tn-seq + Opijnen Tn-seq + Veening CRISPRi · Sham Lab NUS</div>
 
 <script>
 const D = VENN_DATA;
 const METHOD_COLORS = {
-  'Dual Tn-seq':  '#0279EE',
-  'Sup-seq':      '#FF9400',
-  'STRING PPI':   '#75A025',
-  'RNA-seq DE':   '#FD9BED',
+  'Dual Tn-seq':    '#0279EE',
+  'RB Tn-seq':      '#FF9400',
+  'Opijnen Tn-seq': '#75A025',
+  'Veening CRISPRi':'#FD9BED',
 };
 const METHOD_IDS = D.methods;
 const N = METHOD_IDS.length;
@@ -149,7 +149,7 @@ document.getElementById('methodLegend').innerHTML = METHOD_IDS.map(m =>
   `<div class="leg-item">
     <div class="leg-dot" style="background:${METHOD_COLORS[m]}"></div>
     <span>${m}</span>
-    <span class="leg-n">${D.method_totals[m].toLocaleString()} edges · ${D.method_genes[m]} genes</span>
+    <span class="leg-n">${D.method_genes[m].toLocaleString()} genes</span>
   </div>`
 ).join('');
 
@@ -241,7 +241,7 @@ function renderSidebar(ci) {
   document.getElementById('panelMeta').innerHTML =
     `<span style="color:#ffc800">${col.exclusive}</span> exclusive genes &nbsp;·&nbsp;
      <span>${col.size}</span> total in intersection &nbsp;·&nbsp;
-     <span style="color:var(--txm)">${col.sets.length} layer${col.sets.length>1?'s':''}</span>`;
+     <span style="color:var(--txm)">${col.sets.length} stud${col.sets.length>1?'ies':'y'}</span>`;
   document.getElementById('panelSearchWrap').style.display = 'block';
   document.getElementById('geneSearch').value = '';
   renderGeneList();

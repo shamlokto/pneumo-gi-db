@@ -116,6 +116,7 @@ class Config:
     de_fdr: float = 0.05
     de_logfc: float = 1.0  # effect-size threshold for DE calling
     top_hubs: int = 20
+    data_dir: str = ''
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -936,46 +937,111 @@ def create_pyvis_html(G: nx.MultiDiGraph, comm_map: Dict[str, int],
 # ═══════════════════════════════════════════════════════════════════════
 
 def _generate_venn_data(G: nx.MultiDiGraph, config: Config):
-    """Generate venn_data.js with 4-layer gene overlap (UpSet plot data)."""
+    """Generate venn_data.js with 4-study gene overlap (UpSet plot data).
+
+    Compares all tested genes from four S. pneumoniae studies, unified in
+    SPD_ (D39W) locus-tag space via orthology mapping:
+      1. Dual Tn-seq (this study) — Table S1
+      2. RB Tn-seq (this study) — Table S4
+      3. Opijnen Tn-seq (all studies) — TIGR4 genome annotation, SP_→SPD_
+      4. Veening CRISPRi (single + dual) — genome-wide sgRNA library, SPV_→SPD_
+    """
     website_dir = os.path.join(config.output_dir, 'website')
+    data_dir = config.data_dir
 
-    # Extract 4 gene sets from the network
-    layer_genes = {
-        'Dual Tn-seq': set(),
-        'Sup-seq': set(),
-        'STRING PPI': set(),
-        'RNA-seq DE': set(),
-    }
-    for u, v, d in G.edges(data=True):
-        src = d.get('source', '')
-        if 'Dual Tn-seq' in src:
-            layer_genes['Dual Tn-seq'].add(u)
-            layer_genes['Dual Tn-seq'].add(v)
-        elif src == 'Sup-seq':
-            layer_genes['Sup-seq'].add(u)
-            layer_genes['Sup-seq'].add(v)
-        elif src == 'STRING':
-            layer_genes['STRING PPI'].add(u)
-            layer_genes['STRING PPI'].add(v)
+    # ── 1. Dual Tn-seq (this study) — all tested genes from Table S1 ──
+    dual_genes = set()
+    wb = openpyxl.load_workbook(config.table_s1, read_only=True)
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        for i, row in enumerate(ws.iter_rows(values_only=True), start=1):
+            if i < 16:          # header at row 16 (1-indexed)
+                continue
+            if i == 16:
+                continue
+            locus1 = str(row[1]).strip() if row[1] else ''
+            locus2 = str(row[2]).strip() if row[2] else ''
+            if locus1 and locus1 != 'None':
+                dual_genes.add(locus1.upper())
+            if locus2 and locus2 != 'None':
+                dual_genes.add(locus2.upper())
+    wb.close()
+    print(f"  Venn — Dual Tn-seq: {len(dual_genes)} SPD_ genes")
+
+    # ── 2. RB Tn-seq (this study) — all tested genes from Table S4 ──
+    rb_genes = set()
+    wb = openpyxl.load_workbook(config.table_s4, read_only=True)
+    ws = wb['Fitness(median) values']
+    rows = list(ws.iter_rows(values_only=True))
+    wb.close()
+    for row in rows[12:]:       # data from row 13 (index 12)
+        if row[0] is None:
+            continue
+        locus = str(row[0]).strip().upper()
+        if locus:
+            rb_genes.add(locus)
+    print(f"  Venn — RB Tn-seq: {len(rb_genes)} SPD_ genes")
+
+    # ── 3. Opijnen Tn-seq — all TIGR4 genes mapped to SPD_ ──
+    with open(os.path.join(data_dir, 'tigr4_genes.json')) as f:
+        tigr4_genes = json.load(f)
+    with open(os.path.join(data_dir, 'sp_to_spd_mapping.json')) as f:
+        sp_map = json.load(f)
+    opijnen_genes = set()
+    for sp_id in tigr4_genes:
+        if sp_id in sp_map:
+            opijnen_genes.add(sp_map[sp_id])
+    print(f"  Venn — Opijnen Tn-seq: {len(opijnen_genes)} SPD_ genes "
+          f"(of {len(tigr4_genes)} TIGR4 genes, {len(sp_map)} mappable)")
+
+    # ── 4. Veening CRISPRi — all library targets mapped to SPD_ ──
+    with open(os.path.join(data_dir, 'veening_crispri_targets.json')) as f:
+        veening_targets = json.load(f)
+    with open(os.path.join(data_dir, 'spv_to_spd_mapping.json')) as f:
+        spv_map = json.load(f)
+    veening_genes = set()
+    for spv_id in veening_targets:
+        if spv_id in spv_map:
+            veening_genes.add(spv_map[spv_id])
+    print(f"  Venn — Veening CRISPRi: {len(veening_genes)} SPD_ genes "
+          f"(of {len(veening_targets)} SPV_ genes, {len(spv_map)} mappable)")
+
+    # ── Build gene-name lookup ──
+    gene_names = {}
+    # Primary: network graph node attributes
     for node in G.nodes():
-        if G.nodes[node].get('is_de', False):
-            layer_genes['RNA-seq DE'].add(node)
+        name = G.nodes[node].get('gene_name', '')
+        if name:
+            gene_names[node] = name
+    # Secondary: TIGR4 gene names via reverse SP_→SPD_ mapping
+    for sp_id, spd_id in sp_map.items():
+        if sp_id in tigr4_genes and tigr4_genes[sp_id]:
+            if spd_id not in gene_names:
+                gene_names[spd_id] = tigr4_genes[sp_id]
 
-    method_ids = list(layer_genes.keys())
+    # ── Define the 4 study sets ──
+    study_genes = {
+        'Dual Tn-seq': dual_genes,
+        'RB Tn-seq': rb_genes,
+        'Opijnen Tn-seq': opijnen_genes,
+        'Veening CRISPRi': veening_genes,
+    }
+
+    method_ids = list(study_genes.keys())
     n_methods = len(method_ids)
 
-    # Compute all 2^n - 1 intersections
+    # ── Compute all 2^n - 1 intersections ──
     from itertools import combinations
     intersections = []
     for r in range(1, n_methods + 1):
         for combo in combinations(range(n_methods), r):
             sets_involved = [method_ids[i] for i in combo]
             # Genes in ALL sets of this combo
-            intersection = layer_genes[sets_involved[0]]
+            intersection = study_genes[sets_involved[0]]
             for s in sets_involved[1:]:
-                intersection = intersection & layer_genes[s]
+                intersection = intersection & study_genes[s]
             # Exclusive = in ALL of these sets but NOT in any other
-            other_sets = [layer_genes[method_ids[i]] for i in range(n_methods) if i not in combo]
+            other_sets = [study_genes[method_ids[i]] for i in range(n_methods) if i not in combo]
             exclusive = intersection
             for oset in other_sets:
                 exclusive = exclusive - oset
@@ -983,8 +1049,8 @@ def _generate_venn_data(G: nx.MultiDiGraph, config: Config):
                 continue
             genes_list = []
             for locus in sorted(intersection):
-                name = G.nodes[locus].get('gene_name', locus)
-                gene_methods = [m for m in method_ids if locus in layer_genes[m]]
+                name = gene_names.get(locus, locus)
+                gene_methods = [m for m in method_ids if locus in study_genes[m]]
                 genes_list.append({
                     'name': name,
                     'locus': locus,
@@ -999,22 +1065,8 @@ def _generate_venn_data(G: nx.MultiDiGraph, config: Config):
                 'genes': genes_list,
             })
 
-    method_totals = {}
-    method_genes = {}
-    for m in method_ids:
-        # Count edges per method
-        count = 0
-        for u, v, d in G.edges(data=True):
-            src = d.get('source', '')
-            if (m == 'Dual Tn-seq' and 'Dual Tn-seq' in src) or \
-               (m == 'Sup-seq' and src == 'Sup-seq') or \
-               (m == 'STRING PPI' and src == 'STRING'):
-                count += 1
-            elif m == 'RNA-seq DE':
-                count = sum(1 for n in G.nodes() if G.nodes[n].get('is_de', False))
-                break
-        method_totals[m] = count
-        method_genes[m] = len(layer_genes[m])
+    method_genes = {m: len(study_genes[m]) for m in method_ids}
+    method_totals = {m: len(study_genes[m]) for m in method_ids}  # gene counts, not edge counts
 
     venn_obj = {
         'methods': method_ids,
@@ -1024,6 +1076,7 @@ def _generate_venn_data(G: nx.MultiDiGraph, config: Config):
     }
 
     venn_js = f"""// PneumoGI Venn/UpSet Data — Generated by grn_pipeline.py
+// 4-study gene overlap (all tested genes, SPD_ orthology space)
 // Generated {time.strftime('%Y-%m-%d')}
 const VENN_DATA = {json.dumps(venn_obj, indent=None)};
 """
@@ -1668,6 +1721,8 @@ def main():
     parser.add_argument('--de-fdr', type=float, default=0.05, help='FDR threshold for DE genes')
     parser.add_argument('--de-logfc', type=float, default=1.0, help='|logFC| threshold for DE genes')
     parser.add_argument('--top-hubs', type=int, default=20, help='Number of hub genes to report')
+    parser.add_argument('--data-dir', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data'),
+                        help='Directory containing companion data files (tigr4_genes.json, orthology mappings, etc.)')
     args = parser.parse_args()
 
     config = Config(
@@ -1677,6 +1732,7 @@ def main():
         z_threshold=args.z_threshold, string_score=args.string_score,
         string_species=args.string_species, de_fdr=args.de_fdr,
         de_logfc=args.de_logfc, top_hubs=args.top_hubs,
+        data_dir=args.data_dir,
     )
 
     # Create output directories
