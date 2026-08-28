@@ -1047,8 +1047,12 @@ def _generate_venn_data(G: nx.MultiDiGraph, config: Config):
                 exclusive = exclusive - oset
             if len(intersection) == 0:
                 continue
+            # Only include EXCLUSIVE genes in the genes array — the sidebar
+            # shows exclusive genes, and including all intersection genes
+            # makes the file too large for the browser (2.8 MB → ~50 KB).
+            MAX_GENES = 500
             genes_list = []
-            for locus in sorted(intersection):
+            for locus in sorted(exclusive):
                 name = gene_names.get(locus, locus)
                 gene_methods = [m for m in method_ids if locus in study_genes[m]]
                 genes_list.append({
@@ -1057,6 +1061,8 @@ def _generate_venn_data(G: nx.MultiDiGraph, config: Config):
                     'count': len(gene_methods),
                     'methods': gene_methods,
                 })
+                if len(genes_list) >= MAX_GENES:
+                    break
             intersections.append({
                 'sets': sets_involved,
                 'set_ids': list(combo),
