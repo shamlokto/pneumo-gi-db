@@ -197,7 +197,7 @@ function renderUpset() {
     const connectorH = (maxRow - minRow) * ROW_H;
     const needConnector = filledRows.length > 1;
 
-    matHTML += `<div class="matrix-col${selectedCol===ci?' selected'}" onclick="selectCol(${ci})">`;
+    matHTML += `<div class="matrix-col${selectedCol===ci?' selected':''}" onclick="selectCol(${ci})">`;
     if (needConnector) {
       matHTML += `<div class="connector" style="top:${connectorTop}px;height:${connectorH}px;background:${METHOD_COLORS[col.sets[0]]}"></div>`;
     }
