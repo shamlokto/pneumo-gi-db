@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PneumoGI — Dataset Overlap</title>
+<title>PneumoGI — Genetic Interaction Overlap</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="venn_data.js"></script>
 <style>
 :root{--font-d:'JetBrains Mono',monospace;--font-b:'Inter',system-ui,sans-serif;--r-m:8px;--r-l:12px;--t:.18s ease}
-:root,[data-theme="light"]{--bg:#f4f4f0;--srf:#fff;--elv:#f0efea;--bd:rgba(0,0,0,.1);--tx:#1a1a18;--tx2:#555550;--txm:#888880;--ac:#0066cc;--acs:rgba(0,102,204,.1);--sh:0 1px 3px rgba(0,0,0,.08)}
-[data-theme="dark"]{--bg:#0d0e0f;--srf:#161718;--elv:#1e2022;--bd:rgba(255,255,255,.08);--tx:#e8e9ea;--tx2:#9a9b9d;--txm:#5e6062;--ac:#4d9fff;--acs:rgba(77,159,255,.12);--sh:0 1px 3px rgba(0,0,0,.4)}
+:root,[data-theme="light"]{--bg:#f4f4f0;--srf:#fff;--elv:#f0efea;--bd:rgba(0,0,0,.1);--tx:#1a1a18;--tx2:#555550;--txm:#888880;--ac:#0066cc;--acs:rgba(0,102,204,.1);--sh:0 1px 3px rgba(0,0,0,.08);--neg:#d64541;--pos:#27ae60}
+[data-theme="dark"]{--bg:#0d0e0f;--srf:#161718;--elv:#1e2022;--bd:rgba(255,255,255,.08);--tx:#e8e9ea;--tx2:#9a9b9d;--txm:#5e6062;--ac:#4d9fff;--acs:rgba(77,159,255,.12);--sh:0 1px 3px rgba(0,0,0,.4);--neg:#ff6b6b;--pos:#51cf66}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font-b);font-size:13px;background:var(--bg);color:var(--tx);line-height:1.6;-webkit-font-smoothing:antialiased;transition:background var(--t),color var(--t)}
 
@@ -31,14 +31,18 @@ body{font-family:var(--font-b);font-size:13px;background:var(--bg);color:var(--t
 .hero-i{max-width:1400px;margin:0 auto}
 .hero-t{font-family:var(--font-d);font-size:1.75rem;font-weight:600;letter-spacing:-.04em;line-height:1.1;margin-bottom:.5rem}
 .hero-t em{color:var(--ac);font-style:normal}
-.hero-s{color:var(--tx2);max-width:640px;font-size:.875rem;line-height:1.7}
+.hero-s{color:var(--tx2);max-width:760px;font-size:.875rem;line-height:1.7}
 
-.page{display:grid;grid-template-columns:1fr 340px;gap:16px;padding:18px 22px;max-width:1400px;margin:0 auto;align-items:start}
+.page{display:grid;grid-template-columns:1fr 380px;gap:16px;padding:18px 22px;max-width:1400px;margin:0 auto;align-items:start}
 
 .method-legend{grid-column:1/-1;display:flex;gap:18px;flex-wrap:wrap;padding:10px 14px;background:var(--srf);border:1px solid var(--bd);border-radius:var(--r-l)}
 .leg-item{display:flex;align-items:center;gap:7px;font-size:11.5px}
 .leg-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
 .leg-n{color:var(--txm);font-size:10px}
+.sign-legend{margin-left:auto;display:flex;gap:12px;align-items:center;font-size:10.5px;color:var(--txm)}
+.sign-badge{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;font-family:var(--font-d);font-size:11px;font-weight:700;color:#fff}
+.sign-badge.neg{background:var(--neg)}
+.sign-badge.pos{background:var(--pos)}
 
 .upset-wrap{background:var(--srf);border:1px solid var(--bd);border-radius:var(--r-l);padding:18px 16px;overflow-x:auto}
 .upset-title{font-size:13px;font-weight:700;color:var(--tx);margin-bottom:14px;display:flex;align-items:baseline;gap:10px}
@@ -76,11 +80,15 @@ body{font-family:var(--font-b);font-size:13px;background:var(--bg);color:var(--t
 .panel-search input{width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:5px;padding:5px 9px;font-size:11.5px;color:var(--tx);font-family:inherit;outline:none}
 .panel-search input:focus{border-color:var(--ac)}
 .panel-body{overflow-y:auto;flex:1}
-.gene-row{display:flex;align-items:center;gap:7px;padding:7px 12px;border-bottom:1px solid var(--bd);cursor:pointer;transition:background .12s}
-.gene-row:hover{background:var(--elv)}
-.gname{font-family:var(--font-d);font-size:11px;font-weight:700;flex-shrink:0}
-.glocus{font-size:10px;color:var(--txm);flex:1;overflow:hidden;text-overflow:ellipsis}
-.gcnt{font-size:10px;color:var(--txm);flex-shrink:0}
+.gi-row{display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--bd);transition:background .12s}
+.gi-row:hover{background:var(--elv)}
+.gi-pair{flex:1;min-width:0}
+.gi-names{font-family:var(--font-d);font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gi-names a{color:var(--tx);text-decoration:none}
+.gi-names a:hover{color:var(--ac);text-decoration:underline}
+.gi-loci{font-size:9.5px;color:var(--txm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gi-scores{display:flex;flex-direction:column;gap:1px;flex-shrink:0;align-items:flex-end}
+.gi-score{font-family:var(--font-d);font-size:9px;color:var(--tx2);white-space:nowrap}
 .mdots{display:flex;gap:3px;flex-shrink:0}
 .mdot2{width:6px;height:6px;border-radius:50%}
 .empty-panel{padding:24px 14px;color:var(--txm);font-size:11.5px;text-align:center;line-height:1.8}
@@ -93,7 +101,7 @@ body{font-family:var(--font-b);font-size:13px;background:var(--bg);color:var(--t
 </head>
 <body>
 <div class="hdr"><div class="hdr-i">
-<a class="logo" href="index.html"><div class="logo-t">Pneumo<span>GI</span></div><div class="logo-s">Dataset Overlap</div></a>
+<a class="logo" href="index.html"><div class="logo-t">Pneumo<span>GI</span></div><div class="logo-s">Interaction Overlap</div></a>
 <div class="nav">
 <a class="nb" href="index.html">← Database</a>
 <button class="tb" onclick="toggleTheme()" id="themeBtn">◐</button>
@@ -101,14 +109,14 @@ body{font-family:var(--font-b);font-size:13px;background:var(--bg);color:var(--t
 </div></div>
 
 <div class="hero"><div class="hero-i">
-<h1 class="hero-t"><em>S. pneumoniae</em> — Study Gene Overlap</h1>
-<p class="hero-s">UpSet intersection plot showing overlap of all tested genes across four S. pneumoniae studies: Dual Tn-seq and RB Tn-seq (this study), Opijnen Tn-seq (all studies), and Veening CRISPRi (single + dual). Gene sets are unified in SPD_ (D39W) locus-tag space via orthology mapping. Click any bar or column to explore the genes in that intersection.</p>
+<h1 class="hero-t"><em>S. pneumoniae</em> — Genetic Interaction Overlap</h1>
+<p class="hero-s">UpSet plot of signed genetic interactions (gene pairs) across studies: Dual Tn-seq and RB Tn-seq (this study), and Veening lab dual CRISPRi — unified in SPD_ (D39W) locus-tag space via orthology. An interaction is shared only when the <strong>same gene pair</strong> has the <strong>same sign</strong> (both negative or both positive). <strong>Opijnen Tn-seq</strong> is a single-gene screen shown as context: a pair is "in" Opijnen when both genes were assayed in TIGR4. Click any bar to see the actual interactions.</p>
 </div></div>
 
 <div class="page">
 <div class="method-legend" id="methodLegend"></div>
 <div class="upset-wrap">
-<div class="upset-title">UpSet intersection plot<span>Columns = unique combinations of studies · Height = number of genes exclusive to that combination</span></div>
+<div class="upset-title">UpSet intersection plot<span>Columns = unique study combinations · Height = signed interactions exclusive to that combination</span></div>
 <div id="upsetPlot"></div>
 </div>
 <div class="side-panel">
@@ -117,15 +125,15 @@ body{font-family:var(--font-b);font-size:13px;background:var(--bg);color:var(--t
 <div class="panel-meta" id="panelMeta"></div>
 </div>
 <div class="panel-search" id="panelSearchWrap" style="display:none">
-<input id="geneSearch" type="search" placeholder="Filter genes…" oninput="renderGeneList()">
+<input id="geneSearch" type="search" placeholder="Filter by gene name or locus…" oninput="renderGeneList()">
 </div>
 <div class="panel-body" id="panelBody">
-<div class="empty-panel">Click any bar in the UpSet plot<br>to see the genes in that subset.<br><br><strong style="color:#ffc800">Taller bars</strong> = more genes found<br>exclusively by that combination.</div>
+<div class="empty-panel">Click any bar in the UpSet plot<br>to see the genetic interactions in that subset.<br><br><strong style="color:#ffc800">Taller bars</strong> = more interactions found<br>exclusively by that combination.</div>
 </div>
 </div>
 </div>
 
-<div class="ftr">PneumoGI · Dual Tn-seq + RB Tn-seq + Opijnen Tn-seq + Veening CRISPRi · Sham Lab NUS</div>
+<div class="ftr">PneumoGI · Dual Tn-seq + RB Tn-seq + Veening CRISPRi interactions · Opijnen Tn-seq context · Sham Lab NUS</div>
 
 <script>
 const D = VENN_DATA;
@@ -135,6 +143,8 @@ const METHOD_COLORS = {
   'Opijnen Tn-seq': '#75A025',
   'Veening CRISPRi':'#FD9BED',
 };
+const SET_TYPES = D.set_types || {};
+const SCORE_LABELS = D.score_labels || {};
 const METHOD_IDS = D.methods;
 const N = METHOD_IDS.length;
 const ROW_H = 26;
@@ -145,13 +155,17 @@ function toggleTheme(){
   h.setAttribute('data-theme',h.getAttribute('data-theme')==='dark'?'light':'dark');
 }
 
-document.getElementById('methodLegend').innerHTML = METHOD_IDS.map(m =>
-  `<div class="leg-item">
+document.getElementById('methodLegend').innerHTML = METHOD_IDS.map(m => {
+  const type = SET_TYPES[m] === 'context' ? 'context (both genes assayed)' : 'signed GIs';
+  return `<div class="leg-item">
     <div class="leg-dot" style="background:${METHOD_COLORS[m]}"></div>
     <span>${m}</span>
-    <span class="leg-n">${D.method_genes[m].toLocaleString()} genes</span>
-  </div>`
-).join('');
+    <span class="leg-n">${D.method_genes[m].toLocaleString()} ${type}</span>
+  </div>`;
+}).join('') + `<div class="sign-legend">
+  <span class="sign-badge neg">−</span> negative GI
+  <span class="sign-badge pos">+</span> positive GI
+</div>`;
 
 const cols = D.intersections
   .filter(ix => ix.exclusive > 0 || ix.sets.length === 1)
@@ -219,7 +233,7 @@ function renderUpset() {
     const w = Math.round((sz / maxSetSize) * 120);
     matHTML += `<div class="setsize-row">
       <div class="setsize-bar" style="width:${w}px;background:${METHOD_COLORS[m]}"></div>
-      <span class="setsize-val">${sz}</span>
+      <span class="setsize-val">${sz.toLocaleString()}</span>
     </div>`;
   });
   matHTML += `</div>`;
@@ -238,10 +252,11 @@ function renderSidebar(ci) {
   const col = cols[ci];
   const setLabel = col.sets.length === 1 ? col.sets[0] : col.sets.join(' ∩ ');
   document.getElementById('panelTitle').textContent = setLabel;
+  const truncNote = col.truncated ? ` · showing top ${col.items.length}` : '';
   document.getElementById('panelMeta').innerHTML =
-    `<span style="color:#ffc800">${col.exclusive}</span> exclusive genes &nbsp;·&nbsp;
+    `<span style="color:#ffc800">${col.exclusive}</span> exclusive interactions &nbsp;·&nbsp;
      <span>${col.size}</span> total in intersection &nbsp;·&nbsp;
-     <span style="color:var(--txm)">${col.sets.length} stud${col.sets.length>1?'ies':'y'}</span>`;
+     <span style="color:var(--txm)">${col.sets.length} stud${col.sets.length>1?'ies':'y'}${truncNote}</span>`;
   document.getElementById('panelSearchWrap').style.display = 'block';
   document.getElementById('geneSearch').value = '';
   renderGeneList();
@@ -251,33 +266,43 @@ function renderGeneList() {
   if (selectedCol === null) return;
   const col = cols[selectedCol];
   const q = document.getElementById('geneSearch').value.toLowerCase().trim();
-  let genes = col.genes || [];
-  if (q) genes = genes.filter(g =>
-    g.name.toLowerCase().includes(q) || (g.locus||'').toLowerCase().includes(q)
+  let items = col.items || [];
+  if (q) items = items.filter(g =>
+    g.n1.toLowerCase().includes(q) || g.n2.toLowerCase().includes(q) ||
+    (g.l1||'').toLowerCase().includes(q) || (g.l2||'').toLowerCase().includes(q)
   );
 
-  if (!genes.length) {
+  if (!items.length) {
     document.getElementById('panelBody').innerHTML =
-      `<div class="empty-panel">No genes match "${q}"</div>`;
+      `<div class="empty-panel">No interactions match "${q}"</div>`;
     return;
   }
 
-  document.getElementById('panelBody').innerHTML = genes.map(g => {
+  document.getElementById('panelBody').innerHTML = items.map(g => {
     const dots = METHOD_IDS.map(m =>
       `<div class="mdot2" style="background:${g.methods.includes(m) ? METHOD_COLORS[m] : 'var(--bd)'}"></div>`
     ).join('');
-    const isSPD = g.locus && g.locus !== g.name;
-    return `<div class="gene-row" onclick="openGene('${g.locus || g.name}')">
-      <span class="gname">${g.name}</span>
-      ${isSPD ? `<span class="glocus">${g.locus}</span>` : ''}
+    const signBadge = g.sign === 'negative'
+      ? '<span class="sign-badge neg">−</span>'
+      : '<span class="sign-badge pos">+</span>';
+    const scores = Object.entries(g.scores).map(([m, v]) =>
+      `<span class="gi-score" style="color:${METHOD_COLORS[m]}">${SCORE_LABELS[m]||''} ${v}</span>`
+    ).join('');
+    const named1 = g.n1 !== g.l1, named2 = g.n2 !== g.l2;
+    return `<div class="gi-row">
+      ${signBadge}
+      <div class="gi-pair">
+        <div class="gi-names">
+          <a href="index.html?search=${encodeURIComponent(g.l1)}">${g.n1}</a>
+          <span style="color:var(--txm);font-weight:400"> ↔ </span>
+          <a href="index.html?search=${encodeURIComponent(g.l2)}">${g.n2}</a>
+        </div>
+        ${(named1||named2) ? `<div class="gi-loci">${g.l1} · ${g.l2}</div>` : ''}
+      </div>
+      <div class="gi-scores">${scores}</div>
       <div class="mdots">${dots}</div>
-      <span class="gcnt">${g.count}</span>
     </div>`;
   }).join('');
-}
-
-function openGene(query) {
-  window.location.href = `index.html?search=${encodeURIComponent(query)}`;
 }
 
 renderUpset();

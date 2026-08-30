@@ -937,159 +937,237 @@ def create_pyvis_html(G: nx.MultiDiGraph, comm_map: Dict[str, int],
 # ═══════════════════════════════════════════════════════════════════════
 
 def _generate_venn_data(G: nx.MultiDiGraph, config: Config):
-    """Generate venn_data.js with 4-study gene overlap (UpSet plot data).
+    """Generate venn_data.js with 4-study GENETIC INTERACTION overlap (UpSet plot).
 
-    Compares all tested genes from four S. pneumoniae studies, unified in
+    Compares signed genetic interactions (gene pairs) across studies, unified in
     SPD_ (D39W) locus-tag space via orthology mapping:
-      1. Dual Tn-seq (this study) — Table S1
-      2. RB Tn-seq (this study) — Table S4
-      3. Opijnen Tn-seq (all studies) — TIGR4 genome annotation, SP_→SPD_
-      4. Veening CRISPRi (single + dual) — genome-wide sgRNA library, SPV_→SPD_
+      1. Dual Tn-seq (this study) — Table S3 hits + Table S1 |z|>4, sign from z
+      2. RB Tn-seq (this study) — Table S4 t-values, 71 query KOs x all genes,
+         |t|>3 (median across replicate strains), sign from t
+      3. Veening CRISPRi (single + dual) — pre-computed signed GI pairs from
+         the Dual-CRISPRi R pipeline (data/veening_gi_pairs.json), SPV_→SPD_
+      4. Opijnen Tn-seq (all studies) — CONTEXT set: a pair is "in" Opijnen when
+         both genes were assayed in TIGR4 (SP_→SPD_); Tn-seq is gene x condition,
+         not gene x gene, so it carries no sign.
+
+    Item identity = (frozenset({gene1, gene2}), sign): an interaction is shared
+    between GI studies only when the same pair has the same sign.
     """
+    from itertools import combinations
+    from collections import defaultdict
+
     website_dir = os.path.join(config.output_dir, 'website')
     data_dir = config.data_dir
 
-    # ── 1. Dual Tn-seq (this study) — all tested genes from Table S1 ──
-    dual_genes = set()
-    wb = openpyxl.load_workbook(config.table_s1, read_only=True)
-    for sheet_name in wb.sheetnames:
-        ws = wb[sheet_name]
-        for i, row in enumerate(ws.iter_rows(values_only=True), start=1):
-            if i < 16:          # header at row 16 (1-indexed)
-                continue
-            if i == 16:
-                continue
-            locus1 = str(row[1]).strip() if row[1] else ''
-            locus2 = str(row[2]).strip() if row[2] else ''
-            if locus1 and locus1 != 'None':
-                dual_genes.add(locus1.upper())
-            if locus2 and locus2 != 'None':
-                dual_genes.add(locus2.upper())
-    wb.close()
-    print(f"  Venn — Dual Tn-seq: {len(dual_genes)} SPD_ genes")
-
-    # ── 2. RB Tn-seq (this study) — all tested genes from Table S4 ──
-    rb_genes = set()
-    wb = openpyxl.load_workbook(config.table_s4, read_only=True)
-    ws = wb['Fitness(median) values']
-    rows = list(ws.iter_rows(values_only=True))
-    wb.close()
-    for row in rows[12:]:       # data from row 13 (index 12)
-        if row[0] is None:
-            continue
-        locus = str(row[0]).strip().upper()
-        if locus:
-            rb_genes.add(locus)
-    print(f"  Venn — RB Tn-seq: {len(rb_genes)} SPD_ genes")
-
-    # ── 3. Opijnen Tn-seq — all TIGR4 genes mapped to SPD_ ──
-    with open(os.path.join(data_dir, 'tigr4_genes.json')) as f:
-        tigr4_genes = json.load(f)
+    # ── Load orthology mappings ──
     with open(os.path.join(data_dir, 'sp_to_spd_mapping.json')) as f:
         sp_map = json.load(f)
-    opijnen_genes = set()
-    for sp_id in tigr4_genes:
-        if sp_id in sp_map:
-            opijnen_genes.add(sp_map[sp_id])
-    print(f"  Venn — Opijnen Tn-seq: {len(opijnen_genes)} SPD_ genes "
-          f"(of {len(tigr4_genes)} TIGR4 genes, {len(sp_map)} mappable)")
+    with open(os.path.join(data_dir, 'tigr4_genes.json')) as f:
+        tigr4_genes = json.load(f)
 
-    # ── 4. Veening CRISPRi — all library targets mapped to SPD_ ──
-    with open(os.path.join(data_dir, 'veening_crispri_targets.json')) as f:
-        veening_targets = json.load(f)
-    with open(os.path.join(data_dir, 'spv_to_spd_mapping.json')) as f:
-        spv_map = json.load(f)
-    veening_genes = set()
-    for spv_id in veening_targets:
-        if spv_id in spv_map:
-            veening_genes.add(spv_map[spv_id])
-    print(f"  Venn — Veening CRISPRi: {len(veening_genes)} SPD_ genes "
-          f"(of {len(veening_targets)} SPV_ genes, {len(spv_map)} mappable)")
-
-    # ── Build gene-name lookup ──
-    gene_names = {}
-    # Primary: network graph node attributes
+    # Gene-name lookup: network nodes first, then TIGR4 names via mapping
+    spd_names = {}
     for node in G.nodes():
         name = G.nodes[node].get('gene_name', '')
         if name:
-            gene_names[node] = name
-    # Secondary: TIGR4 gene names via reverse SP_→SPD_ mapping
+            spd_names[node] = name
     for sp_id, spd_id in sp_map.items():
         if sp_id in tigr4_genes and tigr4_genes[sp_id]:
-            if spd_id not in gene_names:
-                gene_names[spd_id] = tigr4_genes[sp_id]
+            spd_names.setdefault(spd_id, tigr4_genes[sp_id])
 
-    # ── Define the 4 study sets ──
-    study_genes = {
-        'Dual Tn-seq': dual_genes,
-        'RB Tn-seq': rb_genes,
-        'Opijnen Tn-seq': opijnen_genes,
-        'Veening CRISPRi': veening_genes,
-    }
+    # ── 1. Dual Tn-seq signed interactions ──
+    dual_items = {}  # (frozenset, sign) -> max |z|
+    wb = openpyxl.load_workbook(config.table_s3, read_only=True)
+    ws = wb['confident_hit_table']
+    rows = list(ws.iter_rows(min_row=12, values_only=True))
+    wb.close()
+    header = rows[0]
+    zcol = header.index('zStrains(10-90%ORF)')
+    for row in rows[1:]:
+        g1, g2 = str(row[1]).strip(), str(row[2]).strip()
+        if not g1 or not g2 or g1 == 'None' or g2 == 'None':
+            continue
+        try:
+            z = float(row[zcol])
+        except (TypeError, ValueError):
+            continue
+        sign = 'positive' if z > 0 else 'negative'
+        key = (frozenset({g1.upper(), g2.upper()}), sign)
+        dual_items[key] = max(dual_items.get(key, 0), abs(z))
 
-    method_ids = list(study_genes.keys())
-    n_methods = len(method_ids)
-
-    # ── Compute all 2^n - 1 intersections ──
-    from itertools import combinations
-    intersections = []
-    for r in range(1, n_methods + 1):
-        for combo in combinations(range(n_methods), r):
-            sets_involved = [method_ids[i] for i in combo]
-            # Genes in ALL sets of this combo
-            intersection = study_genes[sets_involved[0]]
-            for s in sets_involved[1:]:
-                intersection = intersection & study_genes[s]
-            # Exclusive = in ALL of these sets but NOT in any other
-            other_sets = [study_genes[method_ids[i]] for i in range(n_methods) if i not in combo]
-            exclusive = intersection
-            for oset in other_sets:
-                exclusive = exclusive - oset
-            if len(intersection) == 0:
+    wb = openpyxl.load_workbook(config.table_s1, read_only=True)
+    for sheet in wb.sheetnames:
+        ws = wb[sheet]
+        for i, row in enumerate(ws.iter_rows(values_only=True), start=1):
+            if i <= 16:
                 continue
-            # Only include EXCLUSIVE genes in the genes array — the sidebar
-            # shows exclusive genes, and including all intersection genes
-            # makes the file too large for the browser (2.8 MB → ~50 KB).
-            MAX_GENES = 500
-            genes_list = []
-            for locus in sorted(exclusive):
-                name = gene_names.get(locus, locus)
-                gene_methods = [m for m in method_ids if locus in study_genes[m]]
-                genes_list.append({
-                    'name': name,
-                    'locus': locus,
-                    'count': len(gene_methods),
-                    'methods': gene_methods,
+            g1 = str(row[1]).strip() if row[1] else ''
+            g2 = str(row[2]).strip() if row[2] else ''
+            if not g1 or not g2 or g1 == 'None' or g2 == 'None':
+                continue
+            try:
+                z = float(row[13])  # zStrains(10-90%ORF)
+            except (TypeError, ValueError):
+                continue
+            if abs(z) <= config.z_threshold:
+                continue
+            sign = 'positive' if z > 0 else 'negative'
+            key = (frozenset({g1.upper(), g2.upper()}), sign)
+            dual_items[key] = max(dual_items.get(key, 0), abs(z))
+    wb.close()
+    n_pos = sum(1 for k in dual_items if k[1] == 'positive')
+    print(f"  Venn — Dual Tn-seq: {len(dual_items)} signed GIs "
+          f"({n_pos} pos, {len(dual_items)-n_pos} neg)")
+
+    # ── 2. RB Tn-seq signed interactions (1-to-all: query KO x target) ──
+    RB_T_THRESHOLD = 3.0
+    wb = openpyxl.load_workbook(config.table_s4, read_only=True)
+    ws = wb['t values']
+    rows = list(ws.iter_rows(values_only=True))
+    wb.close()
+    ko_genes_row = rows[9][1:]  # row 10: KO gene per strain column
+    col_ko = {}
+    for j, ko in enumerate(ko_genes_row, start=1):
+        if ko and ko != 'WT':
+            col_ko[j] = str(ko).strip().upper()
+    rb_tvals = defaultdict(list)
+    for row in rows[12:]:
+        target = row[0]
+        if target is None:
+            continue
+        target = str(target).strip().upper()
+        for j, ko in col_ko.items():
+            if j < len(row):
+                v = row[j]
+                if v is not None and v != 'N/A' and v != '':
+                    try:
+                        rb_tvals[(ko, target)].append(float(v))
+                    except (TypeError, ValueError):
+                        pass
+    rb_items = {}
+    for (ko, target), vals in rb_tvals.items():
+        t = float(np.median(vals))
+        if abs(t) > RB_T_THRESHOLD and ko != target:
+            sign = 'positive' if t > 0 else 'negative'
+            key = (frozenset({ko, target}), sign)
+            rb_items[key] = max(rb_items.get(key, 0), abs(t))
+    n_pos = sum(1 for k in rb_items if k[1] == 'positive')
+    print(f"  Venn — RB Tn-seq: {len(rb_items)} signed GIs "
+          f"({n_pos} pos, {len(rb_items)-n_pos} neg) from {len(set(col_ko.values()))} query KOs")
+
+    # ── 3. Veening CRISPRi signed interactions (pre-computed, SPV_→SPD_) ──
+    with open(os.path.join(data_dir, 'veening_gi_pairs.json')) as f:
+        veening_raw = json.load(f)
+    veening_items = {}
+    for rec in veening_raw:
+        pair = frozenset(rec['pair'])
+        key = (pair, rec['sign'])
+        veening_items[key] = max(veening_items.get(key, 0), rec['score'])
+    n_pos = sum(1 for k in veening_items if k[1] == 'positive')
+    print(f"  Venn — Veening CRISPRi: {len(veening_items)} signed GIs "
+          f"({n_pos} pos, {len(veening_items)-n_pos} neg)")
+
+    # ── 4. Opijnen Tn-seq context set (both genes assayed in TIGR4) ──
+    opijnen_genes = set(sp_map[sp] for sp in tigr4_genes if sp in sp_map)
+    all_items = set(dual_items) | set(rb_items) | set(veening_items)
+    opijnen_items = {k for k in all_items if k[0] <= opijnen_genes}
+    print(f"  Venn — Opijnen Tn-seq (context): {len(opijnen_items)} items "
+          f"with both genes assayed (of {len(opijnen_genes)} testable genes)")
+
+    # ── 5. Compute all 15 intersections ──
+    study_sets = {
+        'Dual Tn-seq': set(dual_items),
+        'RB Tn-seq': set(rb_items),
+        'Veening CRISPRi': set(veening_items),
+        'Opijnen Tn-seq': opijnen_items,
+    }
+    method_ids = list(study_sets.keys())
+
+    def item_scores(key):
+        scores = {}
+        if key in dual_items:
+            scores['Dual Tn-seq'] = round(dual_items[key], 2)
+        if key in rb_items:
+            scores['RB Tn-seq'] = round(rb_items[key], 2)
+        if key in veening_items:
+            scores['Veening CRISPRi'] = round(veening_items[key], 2)
+        return scores
+
+    MAX_ITEMS = 500  # cap per intersection for browser-friendly file size
+    intersections = []
+    for r in range(1, 5):
+        for combo in combinations(range(4), r):
+            sets_involved = [method_ids[i] for i in combo]
+            inter = study_sets[sets_involved[0]]
+            for s in sets_involved[1:]:
+                inter = inter & study_sets[s]
+            others = [study_sets[method_ids[i]] for i in range(4) if i not in combo]
+            excl = inter
+            for o in others:
+                excl = excl - o
+            if len(inter) == 0:
+                continue
+            # Build item details, sorted by max |score| across studies
+            items = []
+            for key in excl:
+                pair, sign = key
+                g = sorted(pair)
+                scores = item_scores(key)
+                items.append({
+                    'n1': spd_names.get(g[0], g[0]),
+                    'n2': spd_names.get(g[1], g[1]),
+                    'l1': g[0],
+                    'l2': g[1],
+                    'sign': sign,
+                    'scores': scores,
+                    'methods': [m for m in method_ids if key in study_sets[m]],
+                    '_maxscore': max(scores.values()) if scores else 0,
                 })
-                if len(genes_list) >= MAX_GENES:
-                    break
+            items.sort(key=lambda x: -x['_maxscore'])
+            truncated = len(items) > MAX_ITEMS
+            items = items[:MAX_ITEMS]
+            for it in items:
+                del it['_maxscore']
             intersections.append({
                 'sets': sets_involved,
                 'set_ids': list(combo),
-                'size': len(intersection),
-                'exclusive': len(exclusive),
-                'genes': genes_list,
+                'size': len(inter),
+                'exclusive': len(excl),
+                'truncated': truncated,
+                'items': items,
             })
 
-    method_genes = {m: len(study_genes[m]) for m in method_ids}
-    method_totals = {m: len(study_genes[m]) for m in method_ids}  # gene counts, not edge counts
-
+    method_genes = {m: len(study_sets[m]) for m in method_ids}
     venn_obj = {
         'methods': method_ids,
-        'method_totals': method_totals,
+        'method_totals': method_genes,
         'method_genes': method_genes,
+        'set_types': {
+            'Dual Tn-seq': 'interaction',
+            'RB Tn-seq': 'interaction',
+            'Veening CRISPRi': 'interaction',
+            'Opijnen Tn-seq': 'context',
+        },
+        'score_labels': {
+            'Dual Tn-seq': '|z|',
+            'RB Tn-seq': '|t|',
+            'Veening CRISPRi': '|ε|',
+        },
         'intersections': intersections,
     }
 
     venn_js = f"""// PneumoGI Venn/UpSet Data — Generated by grn_pipeline.py
-// 4-study gene overlap (all tested genes, SPD_ orthology space)
+// 4-study GENETIC INTERACTION overlap (signed gene pairs, SPD_ orthology space)
+// Opijnen Tn-seq = context set (both genes assayed); other sets = signed GIs
 // Generated {time.strftime('%Y-%m-%d')}
 const VENN_DATA = {json.dumps(venn_obj, indent=None)};
 """
     venn_path = os.path.join(website_dir, 'venn_data.js')
     with open(venn_path, 'w') as f:
         f.write(venn_js)
-    print(f"  Saved: {venn_path} ({len(intersections)} intersections)")
+    total_items = sum(len(ix['items']) for ix in intersections)
+    print(f"  Saved: {venn_path} ({len(intersections)} intersections, "
+          f"{total_items} interaction items)")
 
 
 def generate_webpage(G: nx.MultiDiGraph, centrality_df: pd.DataFrame,
