@@ -32,7 +32,8 @@ body{font-family:var(--font-b);font-size:var(--text-base);background:var(--bg);c
 .hero-t em{color:var(--ac);font-style:normal}
 .hero-s{color:var(--tx2);max-width:640px;font-size:var(--text-sm);line-height:1.7;margin-bottom:2rem}
 .sr{display:flex;flex-wrap:wrap;gap:1rem}
-.sc{background:var(--elv);border:1px solid var(--bd);border-radius:var(--r-l);padding:1rem 1.5rem;min-width:120px}
+.sc{background:var(--elv);border:1px solid var(--bd);border-radius:var(--r-l);padding:1rem 1.5rem;min-width:120px;cursor:pointer;transition:border-color .15s,transform .15s}
+.sc:hover{border-color:var(--ac);transform:translateY(-2px)}
 .sn{font-family:var(--font-d);font-size:var(--text-xl);font-weight:600;color:var(--ac);letter-spacing:-.03em;line-height:1}
 .sl{font-size:var(--text-xs);color:var(--txm);text-transform:uppercase;letter-spacing:.05em;margin-top:.25rem}
 .tab{display:none;max-width:1400px;margin:0 auto;padding:1.5rem}
@@ -176,9 +177,14 @@ let nwNodes=[],nwEdges=[],nwPos={},focusNode=null,dragging=false,lastMouse=null,
 function init(){
   const s=STATS;
   const statsHtml=[
-    ['Interactions',s.total],['Negative GIs',s.negative],['Positive GIs',s.positive],
-    ['Suppression',s.suppression],['PPI edges',s.ppi],['Communities',s.communities],['Hub genes',s.hubs]
-  ].map(([l,v])=>`<div class="sc"><div class="sn">${v}</div><div class="sl">${l}</div></div>`).join('');
+    ['Interactions',s.total,"filterByClass('All classes')"],
+    ['Negative GIs',s.negative,"filterByClass('negative')"],
+    ['Positive GIs',s.positive,"filterByClass('positive')"],
+    ['Suppression',s.suppression,"filterByClass('suppression')"],
+    ['PPI edges',s.ppi,"filterByClass('PPI')"],
+    ['Communities',s.communities,"goToSummary('commTable')"],
+    ['Hub genes',s.hubs,"goToSummary('hubTable')"]
+  ].map(([l,v,fn])=>`<div class="sc" onclick="${fn}" title="Click to view ${l.toLowerCase()}"><div class="sn">${v}</div><div class="sl">${l}</div></div>`).join('');
   document.getElementById('statsRow').innerHTML=statsHtml;
   document.getElementById('footer').textContent=
     `${s.total} interactions · ${s.nodes} genes · Zik 2025 + Ng 2025 · Sham Lab NUS · Last updated ${new Date().toISOString().slice(0,7)}`;
@@ -207,6 +213,22 @@ function showTab(t,btn){
 function toggleTheme(){
   const h=document.documentElement;
   h.setAttribute('data-theme',h.getAttribute('data-theme')==='dark'?'light':'dark');
+}
+
+// ── STAT CARD CLICK HANDLERS ──
+function filterByClass(cls){
+  document.getElementById('fClass').value=cls;
+  document.getElementById('search').value='';
+  page=0;
+  const tableBtn=document.querySelector('.nb');
+  showTab('table',tableBtn);
+  renderTable();
+  document.getElementById('giTable').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function goToSummary(tableId){
+  const summaryBtn=document.querySelectorAll('.nb')[2];
+  showTab('summary',summaryBtn);
+  setTimeout(()=>{document.getElementById(tableId).scrollIntoView({behavior:'smooth',block:'start'});},100);
 }
 
 // ── TABLE ──
