@@ -469,9 +469,10 @@ def build_network(s3_df: pd.DataFrame, s1_df: pd.DataFrame,
         # Fitness
         if not fitness_indexed.empty and locus in fitness_indexed.index:
             attrs['fitness_median'] = float(fitness_indexed.loc[locus, 'fitness_median'])
-        # Essential
+        # Essential (Sup-seq query genes; match by gene name OR known locus tag,
+        # since yqeH/ccrZ/tsaC lack gene names in the RNA-seq annotation)
         gene_name = locus_map.get(locus, '')
-        if gene_name in QUERY_GENES:
+        if gene_name in QUERY_GENES or locus in QUERY_GENE_LOCI.values():
             attrs['is_essential'] = True
         G.add_node(locus, **attrs)
 
@@ -983,6 +984,7 @@ def _generate_venn_data(G: nx.MultiDiGraph, config: Config):
     wb.close()
     header = rows[0]
     zcol = header.index('zStrains(10-90%ORF)')
+    zcol_full = header.index('zStrains(0-100%ORF)')  # fallback when 10-90% is '-'
     for row in rows[1:]:
         g1, g2 = str(row[1]).strip(), str(row[2]).strip()
         if not g1 or not g2 or g1 == 'None' or g2 == 'None':
@@ -990,7 +992,10 @@ def _generate_venn_data(G: nx.MultiDiGraph, config: Config):
         try:
             z = float(row[zcol])
         except (TypeError, ValueError):
-            continue
+            try:
+                z = float(row[zcol_full])
+            except (TypeError, ValueError):
+                continue
         sign = 'positive' if z > 0 else 'negative'
         key = (frozenset({g1.upper(), g2.upper()}), sign)
         dual_items[key] = max(dual_items.get(key, 0), abs(z))

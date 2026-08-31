@@ -100,7 +100,7 @@ canvas{display:block}
 <input class="inp" type="text" id="search" placeholder="Search gene name or locus..." oninput="renderTable()" style="flex:1;min-width:200px"/>
 <select class="sel" id="fClass" onchange="renderTable()"><option>All classes</option><option>negative</option><option>positive</option><option>suppression</option><option>PPI</option></select>
 <select class="sel" id="fMethod" onchange="renderTable()"><option>All methods</option><option>Dual Tn-seq</option><option>Dual Tn-seq (strict)</option><option>Sup-seq</option><option>STRING</option></select>
-<select class="sel" id="fVal" onchange="renderTable()"><option>All validation</option><option>Untested</option><option>Published</option><option>Computational</option></select>
+<select class="sel" id="fVal" onchange="renderTable()"><option>All validation</option><option>Untested</option><option>Published</option><option>Computational</option><option>Synthetic Lethal</option><option>Growth Defect</option><option>Small Colony</option><option>No Change</option></select>
 </div>
 <div style="overflow-x:auto"><table id="giTable"><thead><tr>
 <th onclick="sortTable('id')">ID</th><th onclick="sortTable('gene_a')">Gene A</th><th onclick="sortTable('gene_b')">Gene B</th>
@@ -152,7 +152,7 @@ canvas{display:block}
 <div class="card" style="margin-bottom:1.5rem"><h3>Top 20 Hub Genes (by Betweenness Centrality)</h3>
 <div style="overflow-x:auto"><table id="hubTable"><thead><tr><th>Rank</th><th>Gene</th><th>Locus</th><th>Product</th><th>Betweenness</th><th>Degree</th><th>COG</th><th>Community</th><th>logFC</th><th>FDR</th><th>Essential</th></tr></thead><tbody id="hubBody"></tbody></table></div></div>
 <div class="card" style="margin-bottom:1.5rem"><h3>Community Functional Characterization</h3>
-<div style="font-size:var(--text-xs);color:var(--txm);margin-bottom:.75rem">DE enrichment: <span id="deSigCount">0</span>/24 communities significant (padj &lt; 0.05) · COG enrichment: <span id="cogSigCount">0</span>/24 communities significant</div>
+<div style="font-size:var(--text-xs);color:var(--txm);margin-bottom:.75rem">DE enrichment: <span id="deSigCount">0</span>/<span class="commTotal">24</span> communities significant (padj &lt; 0.05) · COG enrichment: <span id="cogSigCount">0</span>/<span class="commTotal">24</span> communities significant</div>
 <div style="overflow-x:auto"><table id="commTable"><thead><tr><th>Community</th><th>Size</th><th>DE Count</th><th>DE Enrich</th><th>DE padj</th><th>Dominant COG</th><th>COG Name</th><th>COG padj</th></tr></thead><tbody id="commBody"></tbody></table></div></div>
 <div class="card" style="margin-bottom:1.5rem">
 <h3>Data Sources</h3>
@@ -160,7 +160,7 @@ canvas{display:block}
 <tr><td>Dual Tn-seq</td><td>Transposon sequencing</td><td>~1M double mutants</td><td>Zik et al. 2025 (doi:10.1126/science.adt7685)</td></tr>
 <tr><td>Sup-seq</td><td>Barcoded Tn-seq suppression</td><td>7 essential genes</td><td>Ng et al. 2025</td></tr>
 <tr><td>STRING</td><td>PPI database</td><td>Score > 0.7</td><td>STRING v12.0, taxon 1313</td></tr>
-<tr><td>RNA-seq</td><td>Transcriptomics</td><td>1987 genes</td><td>Ng et al. 2025</td></tr>
+<tr><td>RNA-seq</td><td>Transcriptomics</td><td>1986 genes</td><td>Ng et al. 2025</td></tr>
 </tbody></table>
 </div>
 <button class="btn-dl" onclick="downloadCSV()">⬇ Download Full Database CSV</button>
@@ -246,10 +246,19 @@ function getFiltered(){
   });
 }
 function sortTable(k){if(sortKey===k)sortAsc=!sortAsc;else{sortKey=k;sortAsc=true;}renderTable();}
+function fmtScore(s){const v=parseFloat(s);return isNaN(v)?'':v.toFixed(2);}
 function renderTable(){
   let data=getFiltered();
   data.sort((a,b)=>{
-    let va=a[sortKey]||'',vb=b[sortKey]||'';
+    let va=a[sortKey],vb=b[sortKey];
+    if(sortKey==='score'){  // scores are stored as strings; compare numerically
+      const na=parseFloat(va),nb=parseFloat(vb);
+      if(!isNaN(na)&&!isNaN(nb))return sortAsc?na-nb:nb-na;
+      if(!isNaN(na))return sortAsc?-1:1;  // scored before unscored
+      if(!isNaN(nb))return sortAsc?1:-1;
+      return 0;
+    }
+    va=va||'';vb=vb||'';
     if(typeof va==='number')return sortAsc?va-vb:vb-va;
     return sortAsc?String(va).localeCompare(String(vb)):String(vb).localeCompare(String(va));
   });
@@ -260,7 +269,7 @@ function renderTable(){
   document.getElementById('tbody').innerHTML=slice.map(e=>
     `<tr><td>${e.id}</td><td>${e.gene_a}</td><td>${e.gene_b}</td>
     <td><span class="badge ${bc[e.class]||''}">${e.class}</span></td>
-    <td>${e.subtype}</td><td>${e.method}</td><td>${e.score}</td>
+    <td>${e.subtype}</td><td>${e.method}</td><td>${fmtScore(e.score)}</td>
     <td>${e.cog_a}</td><td>${e.cog_b}</td><td>${e.validation}</td></tr>`
   ).join('');
   let ph=`<button class="pgbtn" onclick="page=0;renderTable()">«</button>`;
@@ -306,6 +315,7 @@ function renderCommunities(){
   const cogSig=rows.filter(r=>r.cog_padj<0.05).length;
   document.getElementById('deSigCount').textContent=deSig;
   document.getElementById('cogSigCount').textContent=cogSig;
+  document.querySelectorAll('.commTotal').forEach(el=>el.textContent=rows.length);
   document.getElementById('commBody').innerHTML=rows.map(r=>{
     const deCls=r.de_padj<0.05?'sig':'nosig';
     const cogCls=r.cog_padj<0.05?'sig':'nosig';
@@ -479,7 +489,7 @@ function drawNetwork(){
   for(let i=0;i<24;i++)palette.push(`hsl(${i*360/24},60%,55%)`);
   nodes.forEach(n=>{
     const p=nwPos[n.id];const rad=5+15*((n.betweenness||0)/maxBetw);
-    ctx.fillStyle=palette[n.community%palette.length];
+    ctx.fillStyle=palette[((n.community%palette.length)+palette.length)%palette.length];
     ctx.globalAlpha=focusNode&&n.id!==focusNode?0.3:0.9;
     ctx.beginPath();ctx.arc(p.x,p.y,rad,0,2*Math.PI);ctx.fill();
     if(n.isEssential){ctx.strokeStyle='#ff0';ctx.lineWidth=2;ctx.stroke();}
